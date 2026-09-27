@@ -9,6 +9,7 @@ import {
   statSync,
   rmSync,
   chmodSync,
+  existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -168,6 +169,50 @@ test("installer saves a supplied setup token for later launches", () => {
       readFileSync(join(site.root, ".env"), "utf8"),
       /^SETUP_TOKEN=supplied-token-123$/m,
     );
+  } finally {
+    site.cleanup();
+  }
+});
+
+test("Git Bash installer hands off to PowerShell with mapped options", () => {
+  const site = fixture();
+  try {
+    const bin = join(site.root, "bin");
+    for (const [name, body] of Object.entries({
+      uname: "printf 'MINGW64_NT-10.0\\n'",
+      cygpath: "printf 'C:\\\\Pingward\\\\install.ps1\\n'",
+      "powershell.exe": `printf '%s\\n' "$@" > "$FAKE_POWERSHELL_LOG"`,
+    })) {
+      const path = join(bin, name);
+      writeFileSync(path, `#!/bin/sh\n${body}\n`);
+      chmodSync(path, 0o755);
+    }
+    const result = site.run(["--port", "4000", "--no-build", "--yes"], {
+      FAKE_POWERSHELL_LOG: join(site.root, "powershell.log"),
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Windows detected/);
+    assert.deepEqual(
+      readFileSync(join(site.root, "powershell.log"), "utf8")
+        .trim()
+        .split("\n"),
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\Pingward\\install.ps1",
+        "-Port",
+        "4000",
+        "-NoBuild",
+        "-Yes",
+      ],
+    );
+    assert.equal(existsSync(join(site.root, "docker.log")), false);
+
+    const missingValue = site.run(["--port"]);
+    assert.equal(missingValue.status, 1);
+    assert.match(missingValue.stderr, /--port needs a value/);
   } finally {
     site.cleanup();
   }

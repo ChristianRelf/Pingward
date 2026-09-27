@@ -3,6 +3,51 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Git Bash and WSL do not always see the Docker Desktop Compose plugin even when
+# it is available to PowerShell. Use the native Windows installer in that case.
+windows_shell=0
+windows_path=""
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*)
+    windows_shell=1
+    if command -v cygpath >/dev/null 2>&1; then
+      windows_path="$(cygpath -w "$PWD/install.ps1")"
+    fi
+    ;;
+  Linux*)
+    if command -v wslpath >/dev/null 2>&1 &&
+       [[ "$(uname -r 2>/dev/null || true)" == *[Mm]icrosoft* ]] &&
+       { ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; }; then
+      windows_shell=1
+      windows_path="$(wslpath -w "$PWD/install.ps1")"
+    fi
+    ;;
+esac
+if (( windows_shell )); then
+  [[ -n "$windows_path" ]] || { echo 'Could not convert the installer path for Windows. Run install.ps1 from PowerShell.' >&2; exit 1; }
+  command -v powershell.exe >/dev/null 2>&1 || { echo 'PowerShell was not found. Run install.ps1 from Windows PowerShell.' >&2; exit 1; }
+  ps_args=()
+  while (( $# )); do
+    case "$1" in
+      --port|--bind|--timeout)
+        (( $# >= 2 )) || { echo "Error: $1 needs a value." >&2; exit 1; }
+        case "$1" in
+          --port) ps_args+=(-Port "$2") ;;
+          --bind) ps_args+=(-BindAddress "$2") ;;
+          --timeout) ps_args+=(-TimeoutSeconds "$2") ;;
+        esac
+        shift 2
+        ;;
+      --no-build) ps_args+=(-NoBuild); shift ;;
+      --yes) ps_args+=(-Yes); shift ;;
+      -h|--help) ps_args+=(-Help); shift ;;
+      *) echo "Error: Unknown option: $1. Run bash install.sh --help." >&2; exit 1 ;;
+    esac
+  done
+  echo 'Windows detected; continuing with the PowerShell installer.'
+  exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$windows_path" "${ps_args[@]}"
+fi
+
 usage() {
   cat <<'HELP'
 Pingward installer
@@ -101,9 +146,9 @@ set_setting() {
 }
 
 echo '[1/4] Checking Docker'
-command -v docker >/dev/null 2>&1 || die 'Docker is not installed. Install Docker Engine or Docker Desktop first.'
-docker compose version >/dev/null 2>&1 || die 'Docker Compose is unavailable. Install the Docker Compose plugin first.'
-docker info >/dev/null 2>&1 || die 'Cannot reach the Docker daemon. Start Docker or grant your user access.'
+command -v docker >/dev/null 2>&1 || die 'Docker is missing. Linux: https://docs.docker.com/engine/install/ ; macOS: https://docs.docker.com/desktop/setup/install/mac-install/ . Install it, then rerun this command.'
+docker compose version >/dev/null 2>&1 || die 'Docker Compose is missing. Linux: https://docs.docker.com/compose/install/linux/ ; macOS: update Docker Desktop. Then rerun this command.'
+docker info >/dev/null 2>&1 || die 'Cannot reach Docker. Start Docker Desktop or the Docker Engine service, then rerun this command. On Linux, check Docker group access: https://docs.docker.com/engine/install/linux-postinstall/ .'
 
 port="${requested_port:-${PINGWARD_HOST_PORT:-}}"
 if [[ -z "$port" ]]; then port="$(read_setting PINGWARD_HOST_PORT)"; fi

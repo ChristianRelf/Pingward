@@ -14,7 +14,21 @@ Pingward is a self-hosted uptime monitor and public status page. Run it on your 
 - Alerts for state changes through your own SMTP server
 - SQLite storage, Docker Compose deployment, and no external runtime services
 
-## Quick start with Docker
+## Quick start on Windows
+
+Open **PowerShell** in the Pingward folder and run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The installer checks for Docker Desktop and Docker Compose. If Docker Desktop is missing and [WinGet](https://learn.microsoft.com/windows/package-manager/winget/) is available, it asks before installing Docker Desktop. Otherwise it opens the [official Docker Desktop setup guide](https://docs.docker.com/desktop/setup/install/windows-install/) and tells you what to do. Complete any Docker Desktop first-run or Windows restart prompts, then run the same command again. If Docker asks for WSL 2, [install it from an administrator PowerShell](https://learn.microsoft.com/windows/wsl/install) with `wsl --install` and restart Windows if requested. Docker Desktop includes Compose; a separate Compose plugin is not needed on Windows.
+
+The installer starts Docker Desktop when possible, checks that Linux containers are enabled, builds Pingward, and chooses port 3000 or the next available port. It prints the app URL and the administrator setup token. You can run it again after updates without losing your data. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Help` for options, including `-Port 4000`, `-BindAddress 127.0.0.1`, and `-NoBuild`.
+
+If you already use `bash install.sh` from Git Bash, it hands off to the Windows PowerShell installer automatically. WSL does the same when Docker Compose is unavailable in WSL.
+
+## Quick start on Linux or macOS
 
 ```sh
 git clone https://github.com/ChristianRelf/Pingward.git
@@ -22,7 +36,9 @@ cd Pingward
 bash install.sh
 ```
 
-The installer checks Docker and Compose, builds the app, selects port 3000 or the next available port, and waits until Pingward responds. It prints the exact status and admin URLs. It generates a first-run setup token in `.env` and displays it after startup; enter it when creating your administrator account. The file is restricted to your user. The installer saves the chosen host port and bind address in `.env`, so a later `docker compose up` uses the same port.
+On Linux, install [Docker Engine](https://docs.docker.com/engine/install/) and the [Compose plugin](https://docs.docker.com/compose/install/linux/) first. On macOS, install [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/), which includes Compose. Start Docker before running the script.
+
+The installer checks Docker and Compose, builds the app, selects port 3000 or the next available port, and waits until Pingward responds. It prints the exact status and admin URLs. It generates a first-run setup token in `.env` and displays it after startup; enter it when creating your administrator account. The file is restricted to your user on Linux and macOS. The installer saves the chosen host port and bind address in `.env`, so a later `docker compose up` uses the same port.
 
 Run `bash install.sh` again after pulling updates. It keeps the existing setup token, settings, database, and port. SQLite data lives in the `pingward-data` Docker volume. For a quick restart without a rebuild, use `bash install.sh --no-build`. Other options are shown with `bash install.sh --help`.
 
