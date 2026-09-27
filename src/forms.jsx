@@ -1,7 +1,12 @@
-import React, { useState } from "react";
-import { ArrowRight } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { ArrowRight, ImageUp } from "lucide-react";
 import { slugify } from "./api";
 import { Modal } from "./ui";
+import { MonitorLogo } from "./monitor-logo";
+import {
+  DEFAULT_MONITOR_LOGO,
+  MONITOR_LOGO_PRESETS,
+} from "../shared/monitor-logos.js";
 
 export function MonitorForm({ initial, groups, onSave, onClose }) {
   const [form, setForm] = useState(
@@ -19,14 +24,54 @@ export function MonitorForm({ initial, groups, onSave, onClose }) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [logoMode, setLogoMode] = useState(
+    initial?.has_logo ? "upload" : "preset",
+  );
+  const [logoPreset, setLogoPreset] = useState(
+    initial?.logo_preset || DEFAULT_MONITOR_LOGO,
+  );
+  const [logoImage, setLogoImage] = useState("");
+  const [logoFileName, setLogoFileName] = useState("");
+  const logoInput = useRef(null);
   const change = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
+  async function chooseLogo(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+    if (
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+      file.size > 512 * 1024
+    ) {
+      setError("Choose a PNG, JPEG, or WebP image smaller than 512 KB.");
+      return;
+    }
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read that image."));
+        reader.readAsDataURL(file);
+      });
+      setLogoImage(image);
+      setLogoFileName(file.name);
+      setLogoMode("upload");
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        logo_mode: logoMode,
+        logo_preset: logoPreset,
+        logo_image: logoMode === "upload" ? logoImage : "",
+      });
       onClose();
     } catch (e) {
       setError(e.message);
@@ -134,6 +179,58 @@ export function MonitorForm({ initial, groups, onSave, onClose }) {
             </label>
           )}
         </div>
+        <div className="logo-field">
+          <span className="field-label">Monitor logo</span>
+          <div className="logo-grid" role="group" aria-label="Monitor logo">
+            {MONITOR_LOGO_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`logo-choice ${logoMode === "preset" && logoPreset === preset.id ? "selected" : ""}`}
+                aria-pressed={logoMode === "preset" && logoPreset === preset.id}
+                onClick={() => {
+                  setLogoMode("preset");
+                  setLogoPreset(preset.id);
+                  setLogoImage("");
+                  setLogoFileName("");
+                }}
+              >
+                <MonitorLogo monitor={{ logo_preset: preset.id }} size={22} />
+                <span>{preset.label}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`logo-choice ${logoMode === "upload" ? "selected" : ""}`}
+              aria-label={
+                logoMode === "upload" ? "Change uploaded logo" : "Upload a logo"
+              }
+              aria-pressed={logoMode === "upload"}
+              onClick={() => logoInput.current?.click()}
+            >
+              {logoMode === "upload" ? (
+                <MonitorLogo monitor={initial} preview={logoImage} size={22} />
+              ) : (
+                <ImageUp size={22} />
+              )}
+              <span>Upload</span>
+            </button>
+          </div>
+          <input
+            ref={logoInput}
+            className="visually-hidden"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={chooseLogo}
+            aria-label="Upload monitor logo"
+          />
+          <small>
+            {logoFileName ||
+              (logoMode === "upload" && initial?.has_logo
+                ? "Using the uploaded logo. Select Upload to replace it."
+                : "PNG, JPEG, or WebP · up to 512 KB")}
+          </small>
+        </div>
         {groups.length > 0 && (
           <div className="group-field">
             <span className="field-label">Show in groups</span>
@@ -185,7 +282,13 @@ export function MonitorForm({ initial, groups, onSave, onClose }) {
 
 export function GroupForm({ initial, onSave, onClose }) {
   const [form, setForm] = useState(
-    initial || { name: "", slug: "", description: "", custom_domain: "" },
+    initial || {
+      name: "",
+      slug: "",
+      description: "",
+      custom_domain: "",
+      display_mode: "inline",
+    },
   );
   const [slugEdited, setSlugEdited] = useState(Boolean(initial));
   const [error, setError] = useState("");
@@ -249,6 +352,33 @@ export function GroupForm({ initial, onSave, onClose }) {
             placeholder="A short description for this group"
           />
         </label>
+        <div className="group-display-field">
+          <span className="field-label">Placement</span>
+          <div
+            className="group-display-options"
+            role="group"
+            aria-label="Group placement"
+          >
+            <button
+              type="button"
+              className={`group-display-choice ${form.display_mode === "inline" ? "selected" : ""}`}
+              aria-pressed={form.display_mode === "inline"}
+              onClick={() => setForm({ ...form, display_mode: "inline" })}
+            >
+              <strong>On main status page</strong>
+              <span>Expandable group with its monitors inside.</span>
+            </button>
+            <button
+              type="button"
+              className={`group-display-choice ${form.display_mode === "page" ? "selected" : ""}`}
+              aria-pressed={form.display_mode === "page"}
+              onClick={() => setForm({ ...form, display_mode: "page" })}
+            >
+              <strong>Separate page</strong>
+              <span>Link to a dedicated group status page.</span>
+            </button>
+          </div>
+        </div>
         <label>
           Custom domain <span className="optional">optional</span>
           <input

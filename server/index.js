@@ -22,11 +22,11 @@ import {
 } from "./auth.js";
 import { validateMonitor, runCheck, startScheduler } from "./checker.js";
 import { listenOnAvailablePort } from "./port.js";
+import { monitorLogoInput } from "./monitor-logo.js";
 
 export const app = express();
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 app.disable("x-powered-by");
-app.use(express.json({ limit: "64kb" }));
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && req.headers.origin) {
@@ -36,6 +36,8 @@ app.use("/api", (req, res, next) => {
   }
   next();
 });
+app.use("/api/admin/monitors", requireAdmin, express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "64kb" }));
 
 const text = (value, max = 500) =>
   String(value ?? "")
@@ -68,6 +70,9 @@ function publicMonitor(row) {
     last_checked_at: row.last_checked_at,
     last_response_ms: row.last_response_ms,
     group_ids: row.group_ids,
+    logo_preset: row.logo_preset,
+    has_logo: row.has_logo,
+    logo_updated_at: row.logo_updated_at,
     history,
     uptime: total ? Number(((up / total) * 100).toFixed(2)) : null,
   };
@@ -81,6 +86,15 @@ app.get("/api/bootstrap", (req, res) => {
     requires_setup_token: Boolean(process.env.SETUP_TOKEN),
     admin,
   });
+});
+app.get("/api/monitor-logos/:id", (req, res) => {
+  const logo = db
+    .prepare("SELECT active, logo_mime, logo_data FROM monitors WHERE id = ?")
+    .get(idFrom(req.params.id));
+  if (!logo?.logo_data || (!logo.active && !currentAdmin(req)))
+    return notFound(res);
+  res.set("X-Content-Type-Options", "nosniff");
+  res.type(logo.logo_mime).send(Buffer.from(logo.logo_data));
 });
 app.post("/api/setup", (req, res) => {
   if (db.prepare("SELECT id FROM admins LIMIT 1").get())
@@ -195,10 +209,12 @@ app.get("/api/admin/data", (_req, res) => {
 
 app.post("/api/admin/monitors", (req, res) => {
   const data = validateMonitor(req.body);
+  const logo = monitorLogoInput(req.body);
   const result = db
     .prepare(
-      `INSERT INTO monitors (name, type, target, port, interval_seconds, timeout_seconds, expected_status, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO monitors (name, type, target, port, interval_seconds, timeout_seconds, expected_status,
+      active, logo_preset, logo_mime, logo_data, logo_updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       data.name,
@@ -209,6 +225,10 @@ app.post("/api/admin/monitors", (req, res) => {
       data.timeout,
       data.expected,
       data.active,
+      logo.preset,
+      logo.mime,
+      logo.data,
+      logo.updatedAt,
     );
   const id = Number(result.lastInsertRowid);
   saveMemberships(id, data.groupIds);
@@ -221,6 +241,7 @@ app.put("/api/admin/monitors/:id", (req, res) => {
   const old = db.prepare("SELECT * FROM monitors WHERE id = ?").get(id);
   if (!old) return notFound(res);
   const data = validateMonitor(req.body);
+  const logo = monitorLogoInput(req.body, old);
   const changed =
     old.target !== data.target ||
     old.type !== data.type ||
@@ -229,7 +250,8 @@ app.put("/api/admin/monitors/:id", (req, res) => {
   if (changed) db.prepare("DELETE FROM checks WHERE monitor_id = ?").run(id);
   db.prepare(
     `UPDATE monitors SET name = ?, type = ?, target = ?, port = ?, interval_seconds = ?, timeout_seconds = ?,
-    expected_status = ?, active = ?, status = ?, last_checked_at = ?, last_response_ms = ?, last_error = ? WHERE id = ?`,
+    expected_status = ?, active = ?, status = ?, last_checked_at = ?, last_response_ms = ?, last_error = ?,
+    logo_preset = ?, logo_mime = ?, logo_data = ?, logo_updated_at = ? WHERE id = ?`,
   ).run(
     data.name,
     data.type,
@@ -243,6 +265,10 @@ app.put("/api/admin/monitors/:id", (req, res) => {
     changed ? null : old.last_checked_at,
     changed ? null : old.last_response_ms,
     changed ? null : old.last_error,
+    logo.preset,
+    logo.mime,
+    logo.data,
+    logo.updatedAt,
     id,
   );
   saveMemberships(id, data.groupIds);
@@ -265,13 +291,14 @@ app.post("/api/admin/monitors/:id/check", async (req, res) => {
   res.json((await runCheck(monitor)) || { busy: true });
 });
 
-function groupInput(body) {
+function groupInput(body, old = null) {
   const name = text(body.name, 100);
   const slug = text(body.slug, 100).toLowerCase();
   const description = text(body.description, 500);
   const customDomain = text(body.custom_domain, 253)
     .toLowerCase()
     .replace(/\.$/, "");
+  const displayMode = body.display_mode || old?.display_mode || "inline";
   if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
     throw new Error(
       "Enter a name and a lowercase slug using letters, numbers and hyphens.",
@@ -281,29 +308,41 @@ function groupInput(body) {
     !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(customDomain)
   )
     throw new Error("Enter a domain without a protocol or path.");
-  return { name, slug, description, customDomain };
+  if (!["inline", "page"].includes(displayMode))
+    throw new Error("Choose where this group appears.");
+  return { name, slug, description, customDomain, displayMode };
 }
 app.post("/api/admin/groups", (req, res) => {
   const data = groupInput(req.body);
   const result = db
     .prepare(
-      "INSERT INTO groups (name, slug, description, custom_domain) VALUES (?, ?, ?, ?)",
-    )
-    .run(data.name, data.slug, data.description, data.customDomain);
-  res.status(201).json({ id: Number(result.lastInsertRowid) });
-});
-app.put("/api/admin/groups/:id", (req, res) => {
-  const data = groupInput(req.body);
-  const result = db
-    .prepare(
-      "UPDATE groups SET name = ?, slug = ?, description = ?, custom_domain = ? WHERE id = ?",
+      "INSERT INTO groups (name, slug, description, custom_domain, display_mode) VALUES (?, ?, ?, ?, ?)",
     )
     .run(
       data.name,
       data.slug,
       data.description,
       data.customDomain,
-      idFrom(req.params.id),
+      data.displayMode,
+    );
+  res.status(201).json({ id: Number(result.lastInsertRowid) });
+});
+app.put("/api/admin/groups/:id", (req, res) => {
+  const id = idFrom(req.params.id);
+  const old = db.prepare("SELECT * FROM groups WHERE id = ?").get(id);
+  if (!old) return notFound(res);
+  const data = groupInput(req.body, old);
+  const result = db
+    .prepare(
+      "UPDATE groups SET name = ?, slug = ?, description = ?, custom_domain = ?, display_mode = ? WHERE id = ?",
+    )
+    .run(
+      data.name,
+      data.slug,
+      data.description,
+      data.customDomain,
+      data.displayMode,
+      id,
     );
   if (!result.changes) return notFound(res);
   res.json({ ok: true });

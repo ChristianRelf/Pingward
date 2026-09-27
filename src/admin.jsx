@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { api, dateLabel } from "./api";
 import { Brand, StatusPill, History } from "./ui";
+import { MonitorLogo } from "./monitor-logo";
 import { MonitorForm, GroupForm, EventForm } from "./forms";
 
 export function AdminPage({ admin }) {
@@ -381,7 +382,7 @@ export function AdminPage({ admin }) {
                             <span
                               className={`table-icon mini-${item.active ? item.status : "paused"}`}
                             >
-                              <Activity size={19} />
+                              <MonitorLogo monitor={item} size={19} />
                             </span>
                             <div>
                               <strong>{item.name}</strong>
@@ -410,7 +411,11 @@ export function AdminPage({ admin }) {
                                   : "—";
                               })()}
                             </strong>
-                            <History history={item.history} style="bars" />
+                            <History
+                              history={item.history}
+                              style="bars"
+                              tooltips={false}
+                            />
                           </div>
                           <span className="table-date">
                             {dateLabel(item.last_checked_at)}
@@ -509,6 +514,12 @@ export function AdminPage({ admin }) {
                                 <Activity size={15} /> {count}{" "}
                                 {count === 1 ? "monitor" : "monitors"}
                               </span>
+                              <span>
+                                <LayoutGrid size={15} />{" "}
+                                {group.display_mode === "inline"
+                                  ? "Main page"
+                                  : "Separate page"}
+                              </span>
                               {group.custom_domain && (
                                 <span>
                                   <Globe2 size={15} /> {group.custom_domain}
@@ -517,11 +528,15 @@ export function AdminPage({ admin }) {
                             </div>
                             <div className="group-card-actions">
                               <a
-                                href={`/status/${group.slug}`}
+                                href={
+                                  group.display_mode === "inline"
+                                    ? `/#group-${group.slug}`
+                                    : `/status/${group.slug}`
+                                }
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                View page <ExternalLink size={14} />
+                                View group <ExternalLink size={14} />
                               </a>
                               <button
                                 onClick={() => {
@@ -545,8 +560,8 @@ export function AdminPage({ admin }) {
                       <LayoutGrid size={30} />
                       <h3>Create your first group</h3>
                       <p>
-                        Give related monitors a dedicated public page and iframe
-                        embed.
+                        Show related monitors together on the main page or a
+                        separate page.
                       </p>
                       <button
                         className="button button-primary"

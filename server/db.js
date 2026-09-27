@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS groups (
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
   custom_domain TEXT NOT NULL DEFAULT '',
+  display_mode TEXT NOT NULL DEFAULT 'inline',
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -42,7 +43,11 @@ CREATE TABLE IF NOT EXISTS monitors (
   last_checked_at TEXT,
   last_response_ms INTEGER,
   last_error TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  logo_preset TEXT NOT NULL DEFAULT 'activity',
+  logo_mime TEXT,
+  logo_data BLOB,
+  logo_updated_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS group_monitors (
   group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -73,11 +78,38 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+const monitorColumns = new Set(
+  db
+    .prepare("PRAGMA table_info(monitors)")
+    .all()
+    .map((column) => column.name),
+);
+for (const [name, definition] of Object.entries({
+  logo_preset: "TEXT NOT NULL DEFAULT 'activity'",
+  logo_mime: "TEXT",
+  logo_data: "BLOB",
+  logo_updated_at: "INTEGER NOT NULL DEFAULT 0",
+})) {
+  if (!monitorColumns.has(name))
+    db.exec(`ALTER TABLE monitors ADD COLUMN ${name} ${definition}`);
+}
+
+const groupColumns = new Set(
+  db
+    .prepare("PRAGMA table_info(groups)")
+    .all()
+    .map((column) => column.name),
+);
+if (!groupColumns.has("display_mode"))
+  db.exec(
+    "ALTER TABLE groups ADD COLUMN display_mode TEXT NOT NULL DEFAULT 'page'",
+  );
+
 const defaults = {
   site_name: "Pingward",
   site_description: "A clear view of every service.",
   theme: "dark",
-  layout: "grid",
+  layout: "list",
   bar_style: "bars",
   public_url: "",
   smtp_host: "",
@@ -112,7 +144,9 @@ if (db.prepare("PRAGMA user_version").get().user_version === 0) {
       "layout",
       "bar_style",
       "public_url",
-    ].every((key) => current[key] === defaults[key])
+    ].every(
+      (key) => current[key] === (key === "layout" ? "grid" : defaults[key]),
+    )
   ) {
     db.prepare("UPDATE settings SET value = 'dark' WHERE key = 'theme'").run();
   }
@@ -127,13 +161,21 @@ export function settings(includeSecrets = false) {
 }
 
 export function monitorRows() {
-  const rows = db.prepare("SELECT * FROM monitors ORDER BY id DESC").all();
+  const rows = db
+    .prepare(
+      `SELECT id, name, type, target, port, interval_seconds, timeout_seconds, expected_status,
+      active, status, last_checked_at, last_response_ms, last_error, created_at,
+      logo_preset, logo_updated_at, logo_data IS NOT NULL AS has_logo
+      FROM monitors ORDER BY id DESC`,
+    )
+    .all();
   const memberships = db
     .prepare("SELECT group_id, monitor_id FROM group_monitors")
     .all();
   return rows.map((row) => ({
     ...row,
     active: Boolean(row.active),
+    has_logo: Boolean(row.has_logo),
     group_ids: memberships
       .filter((item) => item.monitor_id === row.id)
       .map((item) => item.group_id),

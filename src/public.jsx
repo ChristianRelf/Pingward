@@ -4,12 +4,60 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronRight,
   Clock3,
   ExternalLink,
   Radio,
 } from "lucide-react";
 import { api } from "./api";
-import { Brand, MonitorCard, EventCard } from "./ui";
+import { Brand, MonitorCard, MonitorRow, EventCard } from "./ui";
+
+function eventsForMonitor(events, monitor) {
+  return events.filter(
+    (event) =>
+      event.group_id == null || monitor.group_ids.includes(event.group_id),
+  );
+}
+
+function GroupAccordion({ group, monitors, events, barStyle, initiallyOpen }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  const down = monitors.some((monitor) => monitor.status === "down");
+  return (
+    <section className="status-group" id={`group-${group.slug}`}>
+      <button
+        type="button"
+        className="status-group-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronRight className={open ? "expanded" : ""} size={18} />
+        <strong>{group.name}</strong>
+        {down && <span className="group-issue">Issues</span>}
+        <span className="group-service-count">
+          {monitors.length} {monitors.length === 1 ? "service" : "services"}
+        </span>
+      </button>
+      {open && (
+        <div className="status-group-services">
+          {monitors.length ? (
+            monitors.map((monitor) => (
+              <MonitorRow
+                key={monitor.id}
+                monitor={monitor}
+                barStyle={barStyle}
+                events={eventsForMonitor(events, monitor)}
+              />
+            ))
+          ) : (
+            <p className="status-group-empty">
+              No active services in this group.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function PublicPage({ embedId = null }) {
   const slug = location.pathname.startsWith("/status/")
@@ -64,6 +112,17 @@ export function PublicPage({ embedId = null }) {
   const allUp =
     monitors.length > 0 && monitors.every((monitor) => monitor.status === "up");
   const overall = anyDown ? "down" : allUp ? "up" : "pending";
+  const showGroups = !embedId && !selectedGroup;
+  const standaloneMonitors = showGroups
+    ? monitors.filter(
+        (monitor) =>
+          !monitor.group_ids.some((id) =>
+            data.groups.some((group) => group.id === id),
+          ),
+      )
+    : monitors;
+  const hasVisibleServices =
+    standaloneMonitors.length > 0 || (showGroups && data.groups.length > 0);
   const theme = data.settings.theme;
   return (
     <div className={`site theme-${theme} ${embedId ? "embed-mode" : ""}`}>
@@ -82,11 +141,13 @@ export function PublicPage({ embedId = null }) {
         </header>
       )}
       <main className="container public-main">
-        {!embedId && (
-          <div className="eyebrow">
-            <span className="eyebrow-line" /> LIVE SYSTEM STATUS
-          </div>
-        )}
+        {!embedId &&
+          selectedGroup &&
+          location.pathname.startsWith("/status/") && (
+            <a className="status-back" href="/">
+              ← All services
+            </a>
+          )}
         <div className="hero-row">
           <div>
             <h1>
@@ -133,27 +194,10 @@ export function PublicPage({ embedId = null }) {
             {monitors.length} {monitors.length === 1 ? "service" : "services"}
           </span>
         </section>
-        {!embedId && data.groups.length > 0 && (
-          <div className="group-nav">
-            <a className={!selectedGroup ? "selected" : ""} href="/">
-              All services
-            </a>
-            {data.groups.map((group) => (
-              <a
-                key={group.id}
-                className={selectedGroup?.id === group.id ? "selected" : ""}
-                href={`/status/${group.slug}`}
-              >
-                {group.name}
-              </a>
-            ))}
-          </div>
-        )}
-        <section id="services" className="section">
+        <section id="services" className="section status-section">
           <div className="section-heading">
             <div>
-              <span className="section-kicker">PERFORMANCE</span>
-              <h2>Service health</h2>
+              <h2>Services</h2>
             </div>
             <div className="legend">
               <span>
@@ -164,20 +208,65 @@ export function PublicPage({ embedId = null }) {
               </span>
             </div>
           </div>
-          {monitors.length ? (
-            <div
-              className={`monitor-grid ${data.settings.layout === "list" ? "monitor-list" : ""}`}
-            >
-              {monitors.map((monitor) => (
-                <MonitorCard
-                  key={monitor.id}
-                  monitor={monitor}
-                  barStyle={data.settings.bar_style}
-                  compact={Boolean(embedId)}
-                />
-              ))}
+          {standaloneMonitors.length > 0 &&
+            (data.settings.layout === "list" ? (
+              <div className="service-list">
+                {standaloneMonitors.map((monitor) => (
+                  <MonitorRow
+                    key={monitor.id}
+                    monitor={monitor}
+                    barStyle={data.settings.bar_style}
+                    events={eventsForMonitor(data.events, monitor)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="monitor-grid">
+                {standaloneMonitors.map((monitor) => (
+                  <MonitorCard
+                    key={monitor.id}
+                    monitor={monitor}
+                    barStyle={data.settings.bar_style}
+                    compact={Boolean(embedId)}
+                    events={eventsForMonitor(data.events, monitor)}
+                  />
+                ))}
+              </div>
+            ))}
+          {showGroups && data.groups.length > 0 && (
+            <div className="status-groups">
+              {data.groups.map((group, index) => {
+                const groupMonitors = monitors.filter((monitor) =>
+                  monitor.group_ids.includes(group.id),
+                );
+                return group.display_mode === "inline" ? (
+                  <GroupAccordion
+                    key={group.id}
+                    group={group}
+                    monitors={groupMonitors}
+                    events={data.events}
+                    barStyle={data.settings.bar_style}
+                    initiallyOpen={index === 0}
+                  />
+                ) : (
+                  <a
+                    key={group.id}
+                    className="status-group status-group-link"
+                    href={`/status/${group.slug}`}
+                  >
+                    <ChevronRight size={18} />
+                    <strong>{group.name}</strong>
+                    <span className="group-service-count">
+                      {groupMonitors.length}{" "}
+                      {groupMonitors.length === 1 ? "service" : "services"}
+                    </span>
+                    <ArrowRight size={15} />
+                  </a>
+                );
+              })}
             </div>
-          ) : (
+          )}
+          {!hasVisibleServices && (
             <div className="empty-panel">
               <Radio size={26} />
               <h3>No services yet</h3>
@@ -189,7 +278,6 @@ export function PublicPage({ embedId = null }) {
           <section id="updates" className="section updates-section">
             <div className="section-heading">
               <div>
-                <span className="section-kicker">LATEST NEWS</span>
                 <h2>Updates & events</h2>
               </div>
             </div>

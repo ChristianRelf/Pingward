@@ -5,8 +5,9 @@ Pingward is a self-hosted uptime monitor and public status page. Run it on your 
 ## Features
 
 - HTTP/HTTPS checks with an exact expected status code, and TCP port checks
-- Public status page with 90-day uptime history, response times, and automatic refresh
-- Groups with dedicated `/status/:slug` pages and iframe embeds at `/embed/:id`
+- Public status page with 90-day uptime history, day and incident tooltips, response times, and automatic refresh
+- Groups that expand on the main page or link to dedicated `/status/:slug` pages, plus iframe embeds at `/embed/:id`
+- Per-monitor preset icons or uploaded PNG, JPEG, and WebP logos stored in SQLite
 - Optional custom domain for each group
 - News, maintenance, incident, and resolved updates
 - Light, dark, and system themes; grid and list layouts; uptime bars and Git-style graphs
@@ -91,8 +92,8 @@ Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./da
 ## Using Pingward
 
 1. Visit `/admin` and create the admin account with a password of at least 12 characters.
-2. Add an HTTP URL (such as `https://example.com/health`) or a TCP host and port under **Monitors**. The minimum interval is 30 seconds.
-3. Create groups under **Groups**, then edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
+2. Add an HTTP URL (such as `https://example.com/health`) or a TCP host and port under **Monitors**. Choose a preset logo or upload a PNG, JPEG, or WebP image up to 512 KB. The minimum interval is 30 seconds.
+3. Create groups under **Groups** and choose **On main status page** for an expandable section or **Separate page** for a dedicated link. Edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
 4. Publish updates under **Updates**. Use **Appearance** for the page theme, layout, and history style.
 5. Enter your SMTP server, sender, and recipient under **Notifications**. Save, then send a test email. Pingward sends alerts when a monitor goes down or recovers. A newly added healthy monitor does not send an alert.
 
@@ -100,7 +101,7 @@ The admin dashboard is on the same host as the public page. There is no outbound
 
 ## Data and backups
 
-The SQLite database holds settings, monitor history, sessions, and SMTP credentials. Protect access to the volume and back it up regularly. History older than 91 days is deleted automatically. To make a consistent backup of a running instance, use SQLite's backup command against the database file, or stop the container before copying the volume. Restoring the database file into the data volume restores the instance.
+The SQLite database holds settings, monitor history, uploaded logos, sessions, and SMTP credentials. Protect access to the volume and back it up regularly. History older than 91 days is deleted automatically. To make a consistent backup of a running instance, use SQLite's backup command against the database file, or stop the container before copying the volume. Restoring the database file into the data volume restores the instance.
 
 Only an administrator can add check targets. Treat the admin account as trusted: monitors intentionally make outbound HTTP or TCP connections from your server.
 

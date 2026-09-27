@@ -9,8 +9,8 @@
     "docker:up": "bash install.sh",
     "start": "node server/index.js",
     "test": "node --test server/*.test.js scripts/*.test.js",
-    "format": "prettier --write src server scripts/*.js vite.config.js",
-    "format:check": "prettier --check src server scripts/*.js vite.config.js"
+    "format": "prettier --write src server shared scripts/*.js vite.config.js",
+    "format:check": "prettier --check src server shared scripts/*.js vite.config.js"
   },
   "dependencies": {
     "express": "^5.1.0",

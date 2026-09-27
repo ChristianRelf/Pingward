@@ -118,6 +118,7 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     slug: "core-services",
     description: "Essential systems",
     custom_domain: "status.example.com",
+    display_mode: "inline",
   });
   assert.equal(group.status, 201);
   const groupId = group.body.id;
@@ -131,6 +132,32 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     ).status,
     409,
   );
+  const pageGroup = await request("/admin/groups", "POST", {
+    name: "Other services",
+    slug: "other-services",
+    display_mode: "page",
+  });
+  assert.equal(pageGroup.status, 201);
+  assert.equal(
+    (
+      await request(`/admin/groups/${pageGroup.body.id}`, "PUT", {
+        name: "Other services",
+        slug: "other-services",
+        display_mode: "inline",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request(`/admin/groups/${pageGroup.body.id}`, "PUT", {
+        name: "Other services",
+        slug: "other-services",
+        display_mode: "page",
+      })
+    ).status,
+    200,
+  );
   const monitor = await request("/admin/monitors", "POST", {
     name: "Website",
     type: "http",
@@ -140,6 +167,8 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     expected_status: 200,
     active: true,
     group_ids: [groupId],
+    logo_mode: "preset",
+    logo_preset: "globe",
   });
   assert.equal(monitor.status, 201);
   const monitorId = monitor.body.id;
@@ -161,6 +190,18 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   assert.equal(page.body.monitors[0].status, "up");
   assert.equal(page.body.monitors[0].uptime, 100);
   assert.equal(page.body.events[0].title, "Welcome");
+  assert.equal(page.body.monitors[0].logo_preset, "globe");
+  assert.equal(page.body.monitors[0].has_logo, false);
+  assert.equal(
+    page.body.groups.find((item) => item.id === groupId).display_mode,
+    "inline",
+  );
+  assert.equal(
+    (await request("/public")).body.groups.find(
+      (item) => item.id === pageGroup.body.id,
+    ).display_mode,
+    "page",
+  );
   const domainPage = await new Promise((resolve, reject) => {
     httpRequest(
       `${base}/api/public`,
@@ -178,6 +219,46 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   });
   assert.equal(domainPage.selected_group, groupId);
   assert.equal((await request("/public?group=missing")).status, 404);
+
+  const logoUpdate = {
+    name: "Website",
+    type: "http",
+    target: checkUrl,
+    interval_seconds: 60,
+    timeout_seconds: 10,
+    expected_status: 200,
+    active: true,
+    group_ids: [groupId],
+    logo_mode: "upload",
+  };
+  const badLogo = await request(`/admin/monitors/${monitorId}`, "PUT", {
+    ...logoUpdate,
+    logo_image: "data:image/svg+xml;base64,PHN2Zy8+",
+  });
+  assert.equal(badLogo.status, 400);
+  const oversizedLogo = await request(`/admin/monitors/${monitorId}`, "PUT", {
+    ...logoUpdate,
+    logo_image: `data:image/png;base64,${Buffer.alloc(512 * 1024 + 1).toString("base64")}`,
+  });
+  assert.equal(oversizedLogo.status, 400);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOQO9HzHwAE7AJyoSoi2AAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  assert.equal(
+    (
+      await request(`/admin/monitors/${monitorId}`, "PUT", {
+        ...logoUpdate,
+        logo_image: `data:image/png;base64,${png.toString("base64")}`,
+      })
+    ).status,
+    200,
+  );
+  const logoResponse = await fetch(`${base}/api/monitor-logos/${monitorId}`);
+  assert.equal(logoResponse.status, 200);
+  assert.match(logoResponse.headers.get("content-type"), /^image\/png/);
+  assert.deepEqual(Buffer.from(await logoResponse.arrayBuffer()), png);
+  assert.equal((await request("/public")).body.monitors[0].has_logo, true);
 
   const settings = await request("/admin/settings", "PUT", {
     site_name: "Example Status",
@@ -238,6 +319,11 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   assert.equal(editedMonitor.status, "up");
+  assert.equal(editedMonitor.has_logo, true);
+  assert.equal(
+    (await fetch(`${base}/api/monitor-logos/${monitorId}`)).status,
+    200,
+  );
   assert.equal(
     editedMonitor.history.reduce((sum, day) => sum + day.total, 0),
     1,
@@ -246,6 +332,26 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   assert.equal(
     (await request("/admin/data")).body.monitors[0].group_ids[0],
     groupId,
+  );
+
+  assert.equal(
+    (
+      await request(`/admin/monitors/${monitorId}`, "PUT", {
+        ...logoUpdate,
+        target: `${checkUrl}?updated=1`,
+        logo_mode: "preset",
+        logo_preset: "database",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await fetch(`${base}/api/monitor-logos/${monitorId}`)).status,
+    404,
+  );
+  assert.equal(
+    (await request("/public")).body.monitors[0].logo_preset,
+    "database",
   );
 
   assert.equal(

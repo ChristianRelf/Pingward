@@ -1,13 +1,7 @@
 import React, { useEffect } from "react";
-import {
-  Activity,
-  Check,
-  Megaphone,
-  Settings2,
-  SquareActivity,
-  X,
-} from "lucide-react";
+import { Activity, Check, Megaphone, Settings2, X } from "lucide-react";
 import { dateLabel, statusLabel } from "./api";
+import { MonitorLogo } from "./monitor-logo";
 
 export function Brand({ compact = false }) {
   return (
@@ -31,7 +25,12 @@ export function StatusPill({ status }) {
   );
 }
 
-export function History({ history = [], style = "bars" }) {
+export function History({
+  history = [],
+  style = "bars",
+  events = [],
+  tooltips = true,
+}) {
   const byDay = new Map(history.map((item) => [item.day, item]));
   const cells = Array.from({ length: 90 }, (_, index) => {
     const day = new Date();
@@ -46,12 +45,53 @@ export function History({ history = [], style = "bars" }) {
         : item.up === 0
           ? "down"
           : "partial";
+    const event = events.find(
+      (entry) => entry.created_at?.slice(0, 10) === key,
+    );
+    const label = event
+      ? event.kind === "incident"
+        ? "Incident"
+        : event.kind === "maintenance"
+          ? "Maintenance"
+          : event.kind === "resolved"
+            ? "Resolved"
+            : "Update"
+      : state === "up"
+        ? "No incidents"
+        : state === "down"
+          ? "Outage"
+          : state === "partial"
+            ? "Degraded"
+            : "No checks";
+    const date = new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
     return (
       <span
         key={key}
-        className={`history-cell history-${state}`}
-        title={`${key}: ${item ? `${item.up}/${item.total} checks up` : "No checks"}`}
-      />
+        className={`history-cell history-${state} ${state === "up" && ["incident", "maintenance"].includes(event?.kind) ? `history-event-${event.kind}` : ""}`}
+        tabIndex={tooltips && (item || event) ? 0 : -1}
+        aria-label={`${date}: ${label}${item ? `, ${item.up} of ${item.total} checks up` : ""}`}
+      >
+        {tooltips && (
+          <span
+            className={`history-tooltip ${event ? `history-tooltip-${event.kind}` : ""}`}
+            role="tooltip"
+          >
+            <strong>{label}</strong>
+            <span>{date}</span>
+            {event && <em>{event.title}</em>}
+            {item && (
+              <small>
+                {item.up} of {item.total} checks operational
+              </small>
+            )}
+          </span>
+        )}
+      </span>
     );
   });
   return (
@@ -64,12 +104,17 @@ export function History({ history = [], style = "bars" }) {
   );
 }
 
-export function MonitorCard({ monitor, barStyle, compact = false }) {
+export function MonitorCard({
+  monitor,
+  barStyle,
+  compact = false,
+  events = [],
+}) {
   return (
     <article className={`monitor-card ${compact ? "monitor-compact" : ""}`}>
       <div className="monitor-top">
         <span className={`monitor-icon monitor-icon-${monitor.status}`}>
-          <SquareActivity size={20} />
+          <MonitorLogo monitor={monitor} size={20} />
         </span>
         <div className="monitor-heading">
           <h3>{monitor.name}</h3>
@@ -90,11 +135,26 @@ export function MonitorCard({ monitor, barStyle, compact = false }) {
             : `${monitor.last_response_ms} ms response`}
         </span>
       </div>
-      <History history={monitor.history} style={barStyle} />
+      <History history={monitor.history} style={barStyle} events={events} />
       <div className="history-labels">
         <span>90 days ago</span>
         <span>Today</span>
       </div>
+    </article>
+  );
+}
+
+export function MonitorRow({ monitor, barStyle, events = [] }) {
+  return (
+    <article className="service-row">
+      <div className="service-row-top">
+        <span className={`monitor-icon monitor-icon-${monitor.status}`}>
+          <MonitorLogo monitor={monitor} size={18} />
+        </span>
+        <strong>{monitor.name}</strong>
+        <StatusPill status={monitor.status} />
+      </div>
+      <History history={monitor.history} style={barStyle} events={events} />
     </article>
   );
 }
