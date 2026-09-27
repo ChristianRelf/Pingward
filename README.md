@@ -6,7 +6,7 @@ Pingward is a self-hosted uptime monitor and public status page. Run it on your 
 
 - HTTP/HTTPS checks with an exact expected status code, and TCP port checks
 - Public status page with 90-day uptime history, day and incident tooltips, response times, and automatic refresh
-- Groups that expand on the main page or link to dedicated `/status/:slug` pages, plus iframe embeds at `/embed/:id`
+- Groups that expand on the main page, with optional dedicated `/status/:slug` pages and iframe embeds at `/embed/:id`
 - Per-monitor preset icons or uploaded PNG, JPEG, and WebP logos stored in SQLite
 - Optional custom domain for each group
 - News, maintenance, incident, and resolved updates
@@ -25,7 +25,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 The installer checks for Docker Desktop and Docker Compose. If Docker Desktop is missing and [WinGet](https://learn.microsoft.com/windows/package-manager/winget/) is available, it asks before installing Docker Desktop. Otherwise it opens the [official Docker Desktop setup guide](https://docs.docker.com/desktop/setup/install/windows-install/) and tells you what to do. Complete any Docker Desktop first-run or Windows restart prompts, then run the same command again. If Docker asks for WSL 2, [install it from an administrator PowerShell](https://learn.microsoft.com/windows/wsl/install) with `wsl --install` and restart Windows if requested. Docker Desktop includes Compose; a separate Compose plugin is not needed on Windows.
 
-The installer starts Docker Desktop when possible, checks that Linux containers are enabled, builds Pingward, and chooses port 3000 or the next available port. It prints the app URL and the administrator setup token. You can run it again after updates without losing your data. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Help` for options, including `-Port 4000`, `-BindAddress 127.0.0.1`, and `-NoBuild`.
+The installer starts Docker Desktop when possible, checks that Linux containers are enabled, builds Pingward, and chooses port 3000 or the next available port. It prints the local URL, a detected server network URL, and the administrator setup token. You can run it again after updates without losing your data. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Help` for options, including `-Port 4000`, `-BindAddress 127.0.0.1`, and `-NoBuild`.
 
 If you already use `bash install.sh` from Git Bash, it hands off to the Windows PowerShell installer automatically. WSL does the same when Docker Compose is unavailable in WSL.
 
@@ -39,7 +39,7 @@ bash install.sh
 
 On Linux, install [Docker Engine](https://docs.docker.com/engine/install/) and the [Compose plugin](https://docs.docker.com/compose/install/linux/) first. On macOS, install [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/), which includes Compose. Start Docker before running the script.
 
-The installer checks Docker and Compose, builds the app, selects port 3000 or the next available port, and waits until Pingward responds. It prints the exact status and admin URLs. It generates a first-run setup token in `.env` and displays it after startup; enter it when creating your administrator account. The file is restricted to your user on Linux and macOS. The installer saves the chosen host port and bind address in `.env`, so a later `docker compose up` uses the same port.
+The installer checks Docker and Compose, builds the app, selects port 3000 or the next available port, and waits until Pingward responds. It prints the local URL and a detected network URL. It generates a first-run setup token in `.env` and displays it after startup; enter it when creating your administrator account. The file is restricted to your user on Linux and macOS. The installer saves the chosen host port and bind address in `.env`, so a later `docker compose up` uses the same port.
 
 Run `bash install.sh` again after pulling updates. It keeps the existing setup token, settings, database, and port. SQLite data lives in the `pingward-data` Docker volume. For a quick restart without a rebuild, use `bash install.sh --no-build`. Other options are shown with `bash install.sh --help`.
 
@@ -50,6 +50,23 @@ bash install.sh --port 4000 --bind 127.0.0.1
 ```
 
 The installer tries subsequent ports if the requested one is occupied. It preserves other values already present in `.env`. If you supply `SETUP_TOKEN` yourself in `.env` or the environment, the installer uses it; remove that token after the admin account exists if you no longer need it.
+
+## Access from another device at home
+
+Install Pingward on the home server, then open the **On your network** URL printed by the installer from a phone or computer on the same network. For example, if the server's IPv4 address is `192.168.1.42` and the chosen port is `3000`, use `http://192.168.1.42:3000` for the status page and `http://192.168.1.42:3000/admin` to manage it. `localhost` only works on the server itself. The installer saves the selected port in `.pingward-port`. After setup, set **Appearance → Public URL** to the network URL if you want alert emails and embed links to use it.
+
+If the installer cannot find the server's address, run `ipconfig` in Windows PowerShell and use the **IPv4 Address** shown for the server's Ethernet or Wi-Fi connection. On Linux, run `ip -4 addr`; on macOS, check **System Settings → Network**. Use that address with the port printed by the installer.
+
+The default bind address, `0.0.0.0`, allows connections through the server's network interfaces. If you previously used `-BindAddress 127.0.0.1` or `--bind 127.0.0.1`, rerun the installer with `0.0.0.0` to allow other devices. If the network URL still fails, check that both devices are on the same home network and allow inbound TCP traffic to the selected port in the server's firewall (on Windows, use the **Private** network profile). A DHCP reservation in your router can keep the server's IP address from changing.
+
+If Windows Firewall blocks the connection, run this from an **administrator PowerShell** in the Pingward folder to allow only devices on the local subnet:
+
+```powershell
+$pingwardPort = [int](Get-Content .\.pingward-port)
+New-NetFirewallRule -DisplayName "Pingward LAN ($pingwardPort)" -Direction Inbound -Action Allow -Protocol TCP -LocalPort $pingwardPort -RemoteAddress LocalSubnet -Profile Private
+```
+
+For access from outside your home, use a domain and HTTPS reverse proxy as described below. You can keep Pingward's app port on your local network and expose only the proxy's HTTPS port.
 
 For a domain or subdomain, point DNS to your server and put a reverse proxy in front of the host port printed by the script. Set `TRUST_PROXY=1` in a `.env` file next to `compose.yaml` when that proxy forwards HTTPS and is the only path to Pingward. Then set **Public URL** under **Appearance**. Pingward uses the request hostname for group custom domains, so point each group domain at the same proxy and forward the original `Host` header. The reverse proxy handles TLS certificates.
 

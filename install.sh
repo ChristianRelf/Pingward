@@ -145,6 +145,39 @@ set_setting() {
   chmod 600 "$env_file"
 }
 
+get_lan_addresses() {
+  local interface address found=0
+  local -a fallback_addresses
+  if command -v ip >/dev/null 2>&1; then
+    while IFS= read -r interface; do
+      [[ -n "$interface" ]] || continue
+      while IFS= read -r address; do
+        if [[ -n "$address" ]]; then
+          printf '%s\n' "$address"
+          found=1
+        fi
+      done < <(ip -o -4 addr show dev "$interface" scope global 2>/dev/null | awk '{ sub(/\/.*/, "", $4); print $4 }')
+    done < <(ip -o -4 route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); break } }' | sort -u)
+  elif command -v route >/dev/null 2>&1 && command -v ipconfig >/dev/null 2>&1; then
+    interface="$(route -n get default 2>/dev/null | awk '/interface:/{ print $2; exit }')"
+    if [[ -n "$interface" ]]; then
+      address="$(ipconfig getifaddr "$interface" 2>/dev/null || true)"
+      if [[ -n "$address" ]]; then
+        printf '%s\n' "$address"
+        found=1
+      fi
+    fi
+  fi
+  if (( ! found )) && command -v hostname >/dev/null 2>&1; then
+    read -r -a fallback_addresses <<< "$(hostname -I 2>/dev/null || true)"
+    for address in "${fallback_addresses[@]}"; do
+      if valid_bind "$address" && [[ "$address" != 127.* && "$address" != 169.254.* && "$address" != 0.* ]]; then
+        printf '%s\n' "$address"
+      fi
+    done
+  fi
+}
+
 echo '[1/4] Checking Docker'
 command -v docker >/dev/null 2>&1 || die 'Docker is missing. Linux: https://docs.docker.com/engine/install/ ; macOS: https://docs.docker.com/desktop/setup/install/mac-install/ . Install it, then rerun this command.'
 docker compose version >/dev/null 2>&1 || die 'Docker Compose is missing. Linux: https://docs.docker.com/compose/install/linux/ ; macOS: update Docker Desktop. Then rerun this command.'
@@ -233,9 +266,29 @@ set_setting PINGWARD_HOST_PORT "$port"
 set_setting PINGWARD_BIND_ADDRESS "$bind"
 printf '%s\n' "$port" > .pingward-port
 
-display_host="$bind"
-if [[ "$bind" == '0.0.0.0' || "$bind" == '127.0.0.1' ]]; then display_host='localhost'; fi
-printf '\nPingward is ready at http://%s:%s\n' "$display_host" "$port"
+display_host='localhost'
+printf '\nPingward is ready.\n'
+if [[ "$bind" == '0.0.0.0' ]]; then
+  printf 'On this server: http://localhost:%s\n' "$port"
+  lan_addresses=()
+  while IFS= read -r address; do
+    [[ -n "$address" ]] && lan_addresses+=("$address")
+  done < <(get_lan_addresses)
+  if (( ${#lan_addresses[@]} )); then
+    display_host="${lan_addresses[0]}"
+    for address in "${lan_addresses[@]}"; do
+      printf 'On your network: http://%s:%s\n' "$address" "$port"
+    done
+  else
+    printf 'To open Pingward from another device, find this server\047s IPv4 address and use http://<server-ip>:%s\n' "$port"
+  fi
+elif [[ "$bind" == '127.0.0.1' ]]; then
+  printf 'On this server only: http://localhost:%s\n' "$port"
+  echo 'To allow other devices, rerun with --bind 0.0.0.0.'
+else
+  display_host="$bind"
+  printf 'On your network: http://%s:%s\n' "$bind" "$port"
+fi
 
 setup_state="$(docker exec "$container_id" node -e "fetch('http://127.0.0.1:3000/api/bootstrap').then(r=>r.json()).then(d=>console.log(d.needs_setup?'setup':'ready')).catch(()=>process.exit(1))" 2>/dev/null)" || setup_state='unknown'
 if [[ "$setup_state" == 'setup' ]]; then
@@ -249,6 +302,7 @@ if [[ "$setup_state" == 'setup' ]]; then
   fi
 elif [[ "$setup_state" == 'ready' ]]; then
   echo 'Your existing admin account and data are ready.'
+  printf 'Admin dashboard: http://%s:%s/admin\n' "$display_host" "$port"
 else
   printf 'Open http://%s:%s/admin to finish setup or sign in.\n' "$display_host" "$port"
   echo 'The setup token is stored in .env.'

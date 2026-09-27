@@ -28,7 +28,7 @@ function fixture() {
 echo "$*" >> "$FAKE_DOCKER_LOG"
 if [ "$1" = "info" ]; then exit 0; fi
 if [ "$1" = "exec" ]; then
-  case "$*" in *api/bootstrap*) echo setup ;; esac
+  case "$*" in *api/bootstrap*) echo "\${FAKE_SETUP_STATE:-setup}" ;; esac
   if [ "$FAKE_HEALTH_FAIL" = 1 ]; then exit 1; fi
   exit 0
 fi
@@ -51,6 +51,17 @@ exit 1
 `,
   );
   chmodSync(fakeDocker, 0o755);
+  const fakeIp = join(root, "bin/ip");
+  writeFileSync(
+    fakeIp,
+    `#!/bin/sh
+case "$*" in
+  "-o -4 route show default") echo 'default via 192.168.1.1 dev eth0' ;;
+  "-o -4 addr show dev eth0 scope global") echo '2: eth0 inet 192.168.1.42/24 brd 192.168.1.255 scope global eth0' ;;
+esac
+`,
+  );
+  chmodSync(fakeIp, 0o755);
   return {
     root,
     run(args = [], extraEnv = {}) {
@@ -99,7 +110,8 @@ test("installer secures setup, finds a free port, and preserves config on rerun"
     const first = site.run(["--port", "3000", "--bind", "127.0.0.1"]);
     assert.equal(first.status, 0, first.stderr);
     assert.match(first.stdout, /Port 3000 is occupied; trying 3001/);
-    assert.match(first.stdout, /Pingward is ready at http:\/\/localhost:3001/);
+    assert.match(first.stdout, /On this server only: http:\/\/localhost:3001/);
+    assert.match(first.stdout, /rerun with --bind 0\.0\.0\.0/);
     assert.match(first.stdout, /Setup token: [a-f0-9]{48}/);
 
     const envPath = join(site.root, ".env");
@@ -116,9 +128,15 @@ test("installer secures setup, finds a free port, and preserves config on rerun"
       "3001\n",
     );
 
-    const second = site.runLegacy(["--no-build"]);
+    const second = site.runLegacy(["--no-build"], {
+      FAKE_SETUP_STATE: "ready",
+    });
     assert.equal(second.status, 0, second.stderr);
     assert.match(second.stdout, /Keeping the existing setup token/);
+    assert.match(
+      second.stdout,
+      /Admin dashboard: http:\/\/localhost:3001\/admin/,
+    );
     assert.doesNotMatch(second.stdout, /Port 3000 is occupied/);
     assert.equal(
       readFileSync(envPath, "utf8").match(/^SETUP_TOKEN=/gm)?.length,
@@ -165,6 +183,14 @@ test("installer saves a supplied setup token for later launches", () => {
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Saved the supplied setup token/);
+    assert.match(
+      result.stdout,
+      /On your network: http:\/\/192\.168\.1\.42:3001/,
+    );
+    assert.match(
+      result.stdout,
+      /Create the admin account at http:\/\/192\.168\.1\.42:3001\/admin/,
+    );
     assert.match(
       readFileSync(join(site.root, ".env"), "utf8"),
       /^SETUP_TOKEN=supplied-token-123$/m,
