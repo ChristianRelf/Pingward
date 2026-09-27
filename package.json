@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch scripts/dev.js",
     "build": "vite build",
-    "docker:up": "bash scripts/up.sh",
+    "docker:up": "bash install.sh",
     "start": "node server/index.js",
     "test": "node --test server/*.test.js scripts/*.test.js",
     "format": "prettier --write src server scripts/*.js vite.config.js",

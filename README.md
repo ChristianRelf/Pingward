@@ -19,12 +19,20 @@ Pingward is a self-hosted uptime monitor and public status page. Run it on your 
 ```sh
 git clone https://github.com/ChristianRelf/Pingward.git
 cd Pingward
-bash scripts/up.sh
+bash install.sh
 ```
 
-The script starts at host port 3000. If that port is occupied, it tries 3001, then 3002, and so on, and prints the selected URL. Open that URL to see the status page, then visit `/admin` to create the administrator account. The selected port is saved in `.pingward-port` for the next launch. The database lives in the `pingward-data` Docker volume. Keep this volume when updating the container.
+The installer checks Docker and Compose, builds the app, selects port 3000 or the next available port, and waits until Pingward responds. It prints the exact status and admin URLs. It generates a first-run setup token in `.env` and displays it after startup; enter it when creating your administrator account. The file is restricted to your user. The installer saves the chosen host port and bind address in `.env`, so a later `docker compose up` uses the same port.
 
-If the instance will be reachable from the internet before you finish setup, set a random `SETUP_TOKEN` in a `.env` file next to `compose.yaml` before starting the container. For example, use `openssl rand -hex 24` to generate one. The setup form will ask for it. Remove the variable after creating the admin account. Without a setup token, the first visitor to `/admin` can create the account.
+Run `bash install.sh` again after pulling updates. It keeps the existing setup token, settings, database, and port. SQLite data lives in the `pingward-data` Docker volume. For a quick restart without a rebuild, use `bash install.sh --no-build`. Other options are shown with `bash install.sh --help`.
+
+You can set a starting port or bind address explicitly:
+
+```sh
+bash install.sh --port 4000 --bind 127.0.0.1
+```
+
+The installer tries subsequent ports if the requested one is occupied. It preserves other values already present in `.env`. If you supply `SETUP_TOKEN` yourself in `.env` or the environment, the installer uses it; remove that token after the admin account exists if you no longer need it.
 
 For a domain or subdomain, point DNS to your server and put a reverse proxy in front of the host port printed by the script. Set `TRUST_PROXY=1` in a `.env` file next to `compose.yaml` when that proxy forwards HTTPS and is the only path to Pingward. Then set **Public URL** under **Appearance**. Pingward uses the request hostname for group custom domains, so point each group domain at the same proxy and forward the original `Host` header. The reverse proxy handles TLS certificates.
 
@@ -36,7 +44,7 @@ server {
     server_name status.example.com;
     # Configure your TLS certificate here.
     location / {
-        proxy_pass http://127.0.0.1:3000; # Use the port printed by scripts/up.sh.
+        proxy_pass http://127.0.0.1:3000; # Use the port printed by install.sh.
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -44,7 +52,7 @@ server {
 }
 ```
 
-Set `PINGWARD_BIND_ADDRESS=127.0.0.1` in `.env` when the proxy runs on the same host and should be the only public entry point. If it runs in another container, use a shared Docker network instead. `docker compose up` directly uses port 3000 unless you set `PINGWARD_HOST_PORT`; use `bash scripts/up.sh` for automatic fallback.
+Use `--bind 127.0.0.1` when the proxy runs on the same host and should be the only public entry point. If it runs in another container, use a shared Docker network instead.
 
 ## Run from source
 
@@ -62,7 +70,7 @@ npm run build
 npm start
 ```
 
-Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./data`. The app creates the directory automatically. `PORT` defaults to `3000`; `npm start` also tries subsequent ports if it is occupied. Set `STRICT_PORT=1` to fail instead of falling back. The Docker container uses strict port 3000 internally while `scripts/up.sh` selects the available host port.
+Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./data`. The app creates the directory automatically. `PORT` defaults to `3000`; `npm start` also tries subsequent ports if it is occupied. Set `STRICT_PORT=1` to fail instead of falling back. The Docker container uses strict port 3000 internally while `install.sh` selects the available host port.
 
 ## Using Pingward
 
