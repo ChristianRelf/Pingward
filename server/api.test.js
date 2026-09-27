@@ -9,6 +9,7 @@ import { createServer as createNetServer } from "node:net";
 const testDir = mkdtempSync(join(tmpdir(), "pingward-test-"));
 process.env.DATA_DIR = testDir;
 const { app } = await import("./index.js");
+const { db } = await import("./db.js");
 
 test("admin can set up an instance, monitor a URL, and publish a grouped status page", async (t) => {
   const target = await new Promise((resolve) => {
@@ -60,6 +61,7 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     target.close();
     checkTarget.close();
     smtp.close();
+    db.close();
     rmSync(testDir, { recursive: true, force: true });
   });
   const base = `http://127.0.0.1:${target.address().port}`;
@@ -266,6 +268,14 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     theme: "dark",
     layout: "list",
     bar_style: "heatmap",
+    accent_color: "#3b82f6",
+    brand_icon: "shield",
+    page_width: "wide",
+    density: "compact",
+    corner_style: "subtle",
+    show_admin_link: "false",
+    show_response_time: "false",
+    footer_text: "Status from Example Inc.",
     public_url: "https://status.example.com",
     smtp_host: "127.0.0.1",
     smtp_port: String(smtp.address().port),
@@ -275,6 +285,21 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     smtp_secure: "false",
   });
   assert.equal(settings.status, 200);
+  assert.equal(settings.body.settings.accent_color, "#3b82f6");
+  const publicSettings = (await request("/public")).body.settings;
+  assert.equal(publicSettings.brand_icon, "shield");
+  assert.equal(publicSettings.page_width, "wide");
+  assert.equal(publicSettings.show_admin_link, "false");
+  assert.equal(publicSettings.footer_text, "Status from Example Inc.");
+  assert.equal(
+    (
+      await request("/admin/settings", "PUT", {
+        ...settings.body.settings,
+        accent_color: "blue",
+      })
+    ).status,
+    400,
+  );
   assert.equal((await request("/admin/smtp/test", "POST")).status, 200);
   checkStatus = 503;
   assert.equal(

@@ -19,7 +19,14 @@ function eventsForMonitor(events, monitor) {
   );
 }
 
-function GroupAccordion({ group, monitors, events, barStyle, initiallyOpen }) {
+function GroupAccordion({
+  group,
+  monitors,
+  events,
+  barStyle,
+  initiallyOpen,
+  showResponseTime,
+}) {
   const [open, setOpen] = useState(initiallyOpen);
   const down = monitors.some((monitor) => monitor.status === "down");
   return (
@@ -45,6 +52,7 @@ function GroupAccordion({ group, monitors, events, barStyle, initiallyOpen }) {
                 key={monitor.id}
                 monitor={monitor}
                 barStyle={barStyle}
+                showResponseTime={showResponseTime}
                 events={eventsForMonitor(events, monitor)}
               />
             ))
@@ -65,12 +73,16 @@ export function PublicPage({ embedId = null }) {
     : "";
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
   useEffect(() => {
     let mounted = true;
     const load = () =>
       api(`/public${slug ? `?group=${encodeURIComponent(slug)}` : ""}`)
         .then((value) => {
-          if (mounted) setData(value);
+          if (mounted) {
+            setData(value);
+            setLastUpdated(new Date());
+          }
         })
         .catch((e) => {
           if (mounted) setError(e.message);
@@ -82,6 +94,17 @@ export function PublicPage({ embedId = null }) {
       clearInterval(timer);
     };
   }, [slug]);
+  useEffect(() => {
+    if (!data) return;
+    const group = data.groups.find(
+      (item) =>
+        item.id ===
+        (embedId ? Number(embedId) : Number(data.selected_group || 0)),
+    );
+    document.title = `${group?.name || data.settings.site_name} · Status`;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    themeColor?.setAttribute("content", data.settings.accent_color);
+  }, [data, embedId]);
   if (error)
     return (
       <div className="state-page">
@@ -124,18 +147,28 @@ export function PublicPage({ embedId = null }) {
   const hasVisibleServices =
     standaloneMonitors.length > 0 || (showGroups && data.groups.length > 0);
   const theme = data.settings.theme;
+  const showResponseTime = data.settings.show_response_time !== "false";
+  const brandProps = {
+    name: data.settings.site_name,
+    icon: data.settings.brand_icon,
+  };
   return (
-    <div className={`site theme-${theme} ${embedId ? "embed-mode" : ""}`}>
+    <div
+      className={`site theme-${theme} page-width-${data.settings.page_width} density-${data.settings.density} corners-${data.settings.corner_style} ${embedId ? "embed-mode" : ""}`}
+      style={{ "--accent": data.settings.accent_color }}
+    >
       {!embedId && (
         <header className="public-header">
           <div className="container nav-inner">
-            <Brand />
+            <Brand {...brandProps} />
             <nav>
               <a href="/#services">Services</a>
               <a href="/#updates">Updates</a>
-              <a className="nav-admin" href="/admin">
-                Dashboard <ArrowRight size={15} />
-              </a>
+              {data.settings.show_admin_link !== "false" && (
+                <a className="nav-admin" href="/admin">
+                  Dashboard <ArrowRight size={15} />
+                </a>
+              )}
             </nav>
           </div>
         </header>
@@ -160,7 +193,9 @@ export function PublicPage({ embedId = null }) {
           </div>
           {!embedId && (
             <span className="updated">
-              <span className="live-dot" /> Updating every 30 seconds
+              <span className="live-dot" /> Live
+              {lastUpdated && <span aria-hidden="true">·</span>}
+              {lastUpdated && <span>Updated just now</span>}
             </span>
           )}
         </div>
@@ -216,6 +251,7 @@ export function PublicPage({ embedId = null }) {
                     key={monitor.id}
                     monitor={monitor}
                     barStyle={data.settings.bar_style}
+                    showResponseTime={showResponseTime}
                     events={eventsForMonitor(data.events, monitor)}
                   />
                 ))}
@@ -228,6 +264,7 @@ export function PublicPage({ embedId = null }) {
                     monitor={monitor}
                     barStyle={data.settings.bar_style}
                     compact={Boolean(embedId)}
+                    showResponseTime={showResponseTime}
                     events={eventsForMonitor(data.events, monitor)}
                   />
                 ))}
@@ -247,6 +284,7 @@ export function PublicPage({ embedId = null }) {
                     events={data.events}
                     barStyle={data.settings.bar_style}
                     initiallyOpen={index === 0}
+                    showResponseTime={showResponseTime}
                   />
                 ) : (
                   <a
@@ -299,17 +337,19 @@ export function PublicPage({ embedId = null }) {
       {!embedId && (
         <footer className="public-footer">
           <div className="container">
-            <Brand compact />
-            <span>
-              Transparent status, powered by{" "}
+            <Brand compact {...brandProps} />
+            <div className="footer-copy">
+              {data.settings.footer_text && (
+                <span>{data.settings.footer_text}</span>
+              )}
               <a
                 href="https://github.com/ChristianRelf/Pingward"
                 target="_blank"
                 rel="noreferrer"
               >
-                Pingward <ExternalLink size={12} />
+                Powered by Pingward <ExternalLink size={12} />
               </a>
-            </span>
+            </div>
           </div>
         </footer>
       )}

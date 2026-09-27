@@ -1,16 +1,38 @@
 import React, { useEffect } from "react";
-import { Activity, Check, Megaphone, Settings2, X } from "lucide-react";
+import {
+  Activity,
+  Check,
+  Megaphone,
+  Radio,
+  Settings2,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { dateLabel, statusLabel } from "./api";
 import { MonitorLogo } from "./monitor-logo";
 
-export function Brand({ compact = false }) {
+export function BrandMark({ icon = "activity", size = 21 }) {
+  if (icon === "none") return null;
+  const Icon =
+    icon === "radio" ? Radio : icon === "shield" ? ShieldCheck : Activity;
+  return <Icon size={size} strokeWidth={2.7} />;
+}
+
+export function Brand({
+  compact = false,
+  name = "pingward",
+  icon = "activity",
+}) {
   return (
     <a className={`brand ${compact ? "brand-compact" : ""}`} href="/">
-      <span className="brand-mark">
-        <Activity size={21} strokeWidth={2.7} />
-      </span>
+      {icon !== "none" && (
+        <span className="brand-mark">
+          <BrandMark icon={icon} />
+        </span>
+      )}
       <span>
-        pingward<span className="brand-dot">.</span>
+        {name}
+        <span className="brand-dot">.</span>
       </span>
     </a>
   );
@@ -109,6 +131,7 @@ export function MonitorCard({
   barStyle,
   compact = false,
   events = [],
+  showResponseTime = true,
 }) {
   return (
     <article className={`monitor-card ${compact ? "monitor-compact" : ""}`}>
@@ -129,11 +152,13 @@ export function MonitorCard({
           90-day uptime{" "}
           <strong>{monitor.uptime == null ? "—" : `${monitor.uptime}%`}</strong>
         </span>
-        <span>
-          {monitor.last_response_ms == null
-            ? "Awaiting first check"
-            : `${monitor.last_response_ms} ms response`}
-        </span>
+        {showResponseTime && (
+          <span>
+            {monitor.last_response_ms == null
+              ? "Awaiting first check"
+              : `${monitor.last_response_ms} ms response`}
+          </span>
+        )}
       </div>
       <History history={monitor.history} style={barStyle} events={events} />
       <div className="history-labels">
@@ -144,7 +169,12 @@ export function MonitorCard({
   );
 }
 
-export function MonitorRow({ monitor, barStyle, events = [] }) {
+export function MonitorRow({
+  monitor,
+  barStyle,
+  events = [],
+  showResponseTime = true,
+}) {
   return (
     <article className="service-row">
       <div className="service-row-top">
@@ -152,6 +182,11 @@ export function MonitorRow({ monitor, barStyle, events = [] }) {
           <MonitorLogo monitor={monitor} size={18} />
         </span>
         <strong>{monitor.name}</strong>
+        {showResponseTime && monitor.last_response_ms != null && (
+          <span className="service-response">
+            {monitor.last_response_ms} ms
+          </span>
+        )}
         <StatusPill status={monitor.status} />
       </div>
       <History history={monitor.history} style={barStyle} events={events} />

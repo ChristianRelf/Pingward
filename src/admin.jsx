@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   CircleHelp,
   Code2,
+  Eye,
   ExternalLink,
   Globe2,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   Megaphone,
   Menu,
   Plus,
+  Palette,
   Radio,
   RefreshCw,
   Settings2,
@@ -27,9 +29,81 @@ import {
   Zap,
 } from "lucide-react";
 import { api, dateLabel } from "./api";
-import { Brand, StatusPill, History } from "./ui";
+import { Brand, BrandMark, StatusPill, History } from "./ui";
 import { MonitorLogo } from "./monitor-logo";
 import { MonitorForm, GroupForm, EventForm } from "./forms";
+
+const accentChoices = [
+  ["#21ab75", "Emerald"],
+  ["#3b82f6", "Blue"],
+  ["#8b5cf6", "Violet"],
+  ["#e76f51", "Coral"],
+  ["#d89b24", "Amber"],
+];
+
+function AppearancePreview({ settings }) {
+  const radius =
+    settings.corner_style === "square"
+      ? "2px"
+      : settings.corner_style === "subtle"
+        ? "7px"
+        : "13px";
+  return (
+    <section className="panel appearance-preview">
+      <div className="appearance-preview-head">
+        <div>
+          <span className="preview-live-dot" />
+          <strong>Live preview</strong>
+          <span>Updates as you make changes</span>
+        </div>
+        <a href="/" target="_blank" rel="noreferrer">
+          Open status page <ExternalLink size={13} />
+        </a>
+      </div>
+      <div
+        className={`preview-canvas preview-theme-${settings.theme} preview-${settings.density} preview-${settings.page_width} preview-layout-${settings.layout}`}
+        style={{
+          "--preview-accent": settings.accent_color,
+          "--preview-radius": radius,
+        }}
+      >
+        <div className="preview-nav">
+          <div className="preview-brand">
+            {settings.brand_icon !== "none" && (
+              <span>
+                <BrandMark icon={settings.brand_icon} size={14} />
+              </span>
+            )}
+            {settings.site_name || "Your status page"}
+          </div>
+          {settings.show_admin_link !== "false" && <i>Dashboard</i>}
+        </div>
+        <div className="preview-body">
+          <p>{settings.site_description || "A clear view of every service."}</p>
+          <div className="preview-status">
+            <Check size={15} />
+            <strong>All systems operational</strong>
+            <span>3 services</span>
+          </div>
+          <div className="preview-services">
+            {["API", "Website", "Database"].map((name, index) => (
+              <div key={name}>
+                <span className="preview-service-icon">
+                  <Activity size={13} />
+                </span>
+                <strong>{name}</strong>
+                {settings.show_response_time !== "false" && (
+                  <small>{[84, 126, 32][index]} ms</small>
+                )}
+                <i>Operational</i>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function AdminPage({ admin }) {
   const [data, setData] = useState(null);
@@ -653,6 +727,7 @@ export function AdminPage({ admin }) {
                     ).catch((e) => setError(e.message));
                   }}
                 >
+                  <AppearancePreview settings={settingsForm} />
                   <section className="panel settings-panel">
                     <div className="settings-panel-head">
                       <span className="settings-icon">
@@ -706,6 +781,106 @@ export function AdminPage({ admin }) {
                         use the current domain.
                       </small>
                     </label>
+                    <label>
+                      Footer message
+                      <input
+                        value={settingsForm.footer_text}
+                        maxLength="300"
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            footer_text: e.target.value,
+                          })
+                        }
+                        placeholder="A short message for your visitors"
+                      />
+                      <small>Leave blank for no custom footer message.</small>
+                    </label>
+                  </section>
+                  <section className="panel settings-panel">
+                    <div className="settings-panel-head">
+                      <span className="settings-icon">
+                        <Palette size={20} />
+                      </span>
+                      <div>
+                        <h2>Brand identity</h2>
+                        <p>Bring your own colour and choose a simple mark.</p>
+                      </div>
+                    </div>
+                    <span className="field-label">Accent colour</span>
+                    <div className="accent-picker">
+                      <div className="accent-swatches">
+                        {accentChoices.map(([value, label]) => (
+                          <button
+                            type="button"
+                            key={value}
+                            title={label}
+                            aria-label={`${label} accent`}
+                            aria-pressed={
+                              settingsForm.accent_color.toLowerCase() === value
+                            }
+                            className={
+                              settingsForm.accent_color.toLowerCase() === value
+                                ? "selected"
+                                : ""
+                            }
+                            style={{ "--swatch": value }}
+                            onClick={() =>
+                              setSettingsForm({
+                                ...settingsForm,
+                                accent_color: value,
+                              })
+                            }
+                          >
+                            {settingsForm.accent_color.toLowerCase() ===
+                              value && <Check size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="custom-colour">
+                        <input
+                          type="color"
+                          value={settingsForm.accent_color}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              accent_color: e.target.value,
+                            })
+                          }
+                        />
+                        <span>{settingsForm.accent_color.toUpperCase()}</span>
+                      </label>
+                    </div>
+                    <span className="field-label">Brand mark</span>
+                    <div className="brand-mark-choices">
+                      {[
+                        ["activity", "Pulse"],
+                        ["radio", "Signal"],
+                        ["shield", "Shield"],
+                        ["none", "None"],
+                      ].map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={`choice ${settingsForm.brand_icon === value ? "chosen" : ""}`}
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              brand_icon: value,
+                            })
+                          }
+                        >
+                          <span className="brand-choice-icon">
+                            {value === "none" ? (
+                              <span aria-hidden="true">—</span>
+                            ) : (
+                              <BrandMark icon={value} size={16} />
+                            )}
+                          </span>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </section>
                   <section className="panel settings-panel">
                     <div className="settings-panel-head">
@@ -776,6 +951,109 @@ export function AdminPage({ admin }) {
                           {label}
                         </button>
                       ))}
+                    </div>
+                  </section>
+                  <section className="panel settings-panel">
+                    <div className="settings-panel-head">
+                      <span className="settings-icon">
+                        <Eye size={20} />
+                      </span>
+                      <div>
+                        <h2>Page shape & visibility</h2>
+                        <p>Tune the spacing and decide what visitors see.</p>
+                      </div>
+                    </div>
+                    <span className="field-label">Content width</span>
+                    <div className="choice-row">
+                      {[
+                        ["standard", "Standard"],
+                        ["wide", "Wide"],
+                      ].map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={`choice ${settingsForm.page_width === value ? "chosen" : ""}`}
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              page_width: value,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="field-label">Spacing</span>
+                    <div className="choice-row">
+                      {[
+                        ["comfortable", "Comfortable"],
+                        ["compact", "Compact"],
+                      ].map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={`choice ${settingsForm.density === value ? "chosen" : ""}`}
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              density: value,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="field-label">Corners</span>
+                    <div className="choice-row">
+                      {[
+                        ["rounded", "Rounded"],
+                        ["subtle", "Subtle"],
+                        ["square", "Square"],
+                      ].map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={`choice ${settingsForm.corner_style === value ? "chosen" : ""}`}
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              corner_style: value,
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="visibility-options">
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={settingsForm.show_admin_link !== "false"}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              show_admin_link: String(e.target.checked),
+                            })
+                          }
+                        />
+                        Show dashboard link in the public header
+                      </label>
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={settingsForm.show_response_time !== "false"}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              show_response_time: String(e.target.checked),
+                            })
+                          }
+                        />
+                        Show response times to visitors
+                      </label>
                     </div>
                   </section>
                   <div className="settings-actions">

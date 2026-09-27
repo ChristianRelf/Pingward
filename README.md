@@ -10,7 +10,9 @@ Pingward is a self-hosted uptime monitor and public status page. Run it on your 
 - Per-monitor preset icons or uploaded PNG, JPEG, and WebP logos stored in SQLite
 - Optional custom domain for each group
 - News, maintenance, incident, and resolved updates
-- Light, dark, and system themes; grid and list layouts; uptime bars and Git-style graphs
+- Light, dark, and system themes; custom accent colours and brand marks
+- Grid and list layouts, standard and wide pages, compact spacing, corner styles, uptime bars, and Git-style graphs
+- Visitor-facing controls for the dashboard link, response times, and custom footer copy
 - One administrator account per installation, created in the browser on first launch
 - Alerts for state changes through your own SMTP server
 - SQLite storage, Docker Compose deployment, and no external runtime services
@@ -94,7 +96,7 @@ Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./da
 1. Visit `/admin` and create the admin account with a password of at least 12 characters.
 2. Add an HTTP URL (such as `https://example.com/health`) or a TCP host and port under **Monitors**. Choose a preset logo or upload a PNG, JPEG, or WebP image up to 512 KB. The minimum interval is 30 seconds.
 3. Create groups under **Groups** and choose **On main status page** for an expandable section or **Separate page** for a dedicated link. Edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
-4. Publish updates under **Updates**. Use **Appearance** for the page theme, layout, and history style.
+4. Publish updates under **Updates**. Use **Appearance** to preview and customize the brand colour, mark, theme, layout, width, spacing, corners, history style, footer, and visitor-facing details.
 5. Enter your SMTP server, sender, and recipient under **Notifications**. Save, then send a test email. Pingward sends alerts when a monitor goes down or recovers. A newly added healthy monitor does not send an alert.
 
 The admin dashboard is on the same host as the public page. There is no outbound connection to Pingward infrastructure. HTTP checks contact only the URLs you configure, and SMTP alerts contact only the mail server you configure. The GitHub link in the public footer is a normal outbound link for visitors who choose to click it.

@@ -185,6 +185,14 @@ app.get("/api/public", (req, res) => {
       theme: publicSettings.theme,
       layout: publicSettings.layout,
       bar_style: publicSettings.bar_style,
+      accent_color: publicSettings.accent_color,
+      brand_icon: publicSettings.brand_icon,
+      page_width: publicSettings.page_width,
+      density: publicSettings.density,
+      corner_style: publicSettings.corner_style,
+      show_admin_link: publicSettings.show_admin_link,
+      show_response_time: publicSettings.show_response_time,
+      footer_text: publicSettings.footer_text,
       public_url: publicSettings.public_url,
     },
     groups: visibleGroups,
@@ -412,6 +420,14 @@ const settingKeys = [
   "theme",
   "layout",
   "bar_style",
+  "accent_color",
+  "brand_icon",
+  "page_width",
+  "density",
+  "corner_style",
+  "show_admin_link",
+  "show_response_time",
+  "footer_text",
   "public_url",
   "smtp_host",
   "smtp_port",
@@ -431,6 +447,20 @@ app.put("/api/admin/settings", (req, res) => {
     throw new Error("Choose a valid layout.");
   if (!["bars", "heatmap"].includes(values.bar_style))
     throw new Error("Choose a valid uptime style.");
+  if (!/^#[0-9a-f]{6}$/i.test(values.accent_color))
+    throw new Error("Accent colour must be a six-digit hex colour.");
+  if (!["activity", "radio", "shield", "none"].includes(values.brand_icon))
+    throw new Error("Choose a valid brand mark.");
+  if (!["standard", "wide"].includes(values.page_width))
+    throw new Error("Choose a valid page width.");
+  if (!["comfortable", "compact"].includes(values.density))
+    throw new Error("Choose a valid page density.");
+  if (!["rounded", "subtle", "square"].includes(values.corner_style))
+    throw new Error("Choose a valid corner style.");
+  values.show_admin_link =
+    values.show_admin_link === "false" ? "false" : "true";
+  values.show_response_time =
+    values.show_response_time === "false" ? "false" : "true";
   if (values.public_url && !/^https?:\/\//.test(values.public_url))
     throw new Error("Public URL must start with http:// or https://.");
   if (
