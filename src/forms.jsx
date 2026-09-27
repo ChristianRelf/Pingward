@@ -375,7 +375,9 @@ export function GroupForm({ initial, onSave, onClose }) {
               onClick={() => setForm({ ...form, display_mode: "page" })}
             >
               <strong>Separate page</strong>
-              <span>Link to a dedicated group status page.</span>
+              <span>
+                Dedicated page, with an expandable group on the main page.
+              </span>
             </button>
           </div>
         </div>

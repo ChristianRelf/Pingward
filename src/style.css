@@ -442,8 +442,13 @@ svg {
   border-radius: 9px;
   background: var(--surface);
 }
-.status-group-toggle,
-.status-group-link {
+.status-group-header {
+  display: flex;
+  align-items: center;
+}
+.status-group-toggle {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
@@ -456,26 +461,31 @@ svg {
   text-align: left;
   font-size: 13px;
 }
-.status-group-link {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
-}
-.status-group-toggle > svg:first-child,
-.status-group-link > svg:first-child {
+.status-group-toggle > svg:first-child {
   color: var(--muted);
-  transition: transform 0.15s;
+  transition: transform 0.22s ease;
 }
 .status-group-toggle > svg.expanded {
   transform: rotate(90deg);
 }
-.status-group-toggle strong,
-.status-group-link strong {
+.status-group-toggle strong {
   flex: 1;
 }
 .status-group-toggle:hover,
-.status-group-link:hover {
+.status-group-page-link:hover {
   background: var(--page);
+}
+.status-group-page-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-right: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
 }
 .group-issue {
   color: var(--red);
@@ -487,8 +497,30 @@ svg {
   font-size: 11px;
   white-space: nowrap;
 }
+.status-group-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.status-group.is-open .status-group-panel {
+  grid-template-rows: 1fr;
+}
 .status-group-services {
+  min-height: 0;
+  overflow: hidden;
   border-top: 1px solid var(--border);
+}
+.status-group:not(.is-open) .status-group-services {
+  border-top-color: transparent;
+}
+.status-group.is-open .status-group-services {
+  overflow: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-group-panel,
+  .status-group-toggle > svg:first-child {
+    transition: none;
+  }
 }
 .status-group-empty {
   margin: 0;
@@ -529,6 +561,9 @@ svg {
 .service-row .history {
   height: 18px;
   gap: 3px;
+}
+.service-row .history-heatmap {
+  height: auto;
 }
 .service-row .history-cell {
   border-radius: 1px;

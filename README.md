@@ -93,7 +93,7 @@ Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./da
 
 1. Visit `/admin` and create the admin account with a password of at least 12 characters.
 2. Add an HTTP URL (such as `https://example.com/health`) or a TCP host and port under **Monitors**. Choose a preset logo or upload a PNG, JPEG, or WebP image up to 512 KB. The minimum interval is 30 seconds.
-3. Create groups under **Groups** and choose **On main status page** for an expandable section or **Separate page** for a dedicated link. Edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
+3. Create groups under **Groups** and choose **On main status page** for an expandable section or **Separate page** for both an expandable section and a dedicated page link. Edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
 4. Publish updates under **Updates**. Use **Appearance** for the page theme, layout, and history style.
 5. Enter your SMTP server, sender, and recipient under **Notifications**. Save, then send a test email. Pingward sends alerts when a monitor goes down or recovers. A newly added healthy monitor does not send an alert.
 
