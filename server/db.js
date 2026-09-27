@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS settings (
 const defaults = {
   site_name: "Pingward",
   site_description: "A clear view of every service.",
-  theme: "light",
+  theme: "dark",
   layout: "grid",
   bar_style: "bars",
   public_url: "",
@@ -93,6 +93,31 @@ const insertDefault = db.prepare(
 );
 for (const [key, value] of Object.entries(defaults))
   insertDefault.run(key, value);
+
+// Adopt the new default on existing instances that still use the original
+// appearance. Leave customized public pages alone, and run this only once so
+// an administrator can choose Light later without it being changed again.
+if (db.prepare("PRAGMA user_version").get().user_version === 0) {
+  const current = Object.fromEntries(
+    db
+      .prepare("SELECT key, value FROM settings")
+      .all()
+      .map((row) => [row.key, row.value]),
+  );
+  if (
+    current.theme === "light" &&
+    [
+      "site_name",
+      "site_description",
+      "layout",
+      "bar_style",
+      "public_url",
+    ].every((key) => current[key] === defaults[key])
+  ) {
+    db.prepare("UPDATE settings SET value = 'dark' WHERE key = 'theme'").run();
+  }
+  db.exec("PRAGMA user_version = 1");
+}
 
 export function settings(includeSecrets = false) {
   const rows = db.prepare("SELECT key, value FROM settings").all();

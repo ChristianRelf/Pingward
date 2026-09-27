@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Activity, ArrowRight, LockKeyhole } from "lucide-react";
 import { api } from "./api";
 import { Brand } from "./ui";
 
@@ -26,42 +25,20 @@ export function AuthPage({ setup = false, requiresSetupToken = false }) {
   }
   return (
     <div className="auth-page">
-      <div className="auth-art">
+      <main className="auth-card">
         <Brand />
-        <div className="auth-art-content">
-          <span className="section-kicker">YOUR SERVICES, IN SIGHT</span>
-          <h1>
-            Peace of mind,
-            <br />
-            one check at a time<span>.</span>
-          </h1>
-          <p>
-            Know what’s up. Share what matters. Keep your users in the loop.
-          </p>
-          <div className="art-status">
-            <span className="live-dot" /> Monitoring made simple{" "}
-            <Activity size={44} />
-          </div>
-        </div>
-        <span className="auth-art-foot">
-          Open source · Self hosted · Your data
-        </span>
-      </div>
-      <div className="auth-form-area">
-        <div className="auth-mobile-brand">
-          <Brand />
-        </div>
         <form className="auth-form" onSubmit={submit}>
-          <span className="form-top-icon">
-            <LockKeyhole size={20} />
-          </span>
-          <h2>{setup ? "Set up your workspace" : "Welcome back"}</h2>
+          <h1>{setup ? "Create admin account" : "Sign in"}</h1>
           <p>
             {setup
-              ? "Create the administrator account for this Pingward instance."
-              : "Sign in to manage your monitors and status page."}
+              ? "Set up this Pingward instance."
+              : "Manage your monitors and status page."}
           </p>
-          {error && <div className="form-error">{error}</div>}
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           <label>
             Email address
             <input
@@ -71,6 +48,7 @@ export function AuthPage({ setup = false, requiresSetupToken = false }) {
               placeholder="you@example.com"
               required
               autoComplete="email"
+              autoFocus
             />
           </label>
           <label>
@@ -92,21 +70,20 @@ export function AuthPage({ setup = false, requiresSetupToken = false }) {
                 type="password"
                 value={setupToken}
                 onChange={(e) => setSetupToken(e.target.value)}
-                placeholder="From your server environment"
+                placeholder="From the installer or .env"
                 required
                 autoComplete="off"
               />
             </label>
           )}
           <button className="button button-primary button-full" disabled={busy}>
-            {busy ? "Please wait…" : setup ? "Create admin account" : "Sign in"}{" "}
-            <ArrowRight size={17} />
+            {busy ? "Please wait…" : setup ? "Create account" : "Sign in"}
           </button>
           <a className="auth-back" href="/">
-            ← Back to status page
+            Back to status page
           </a>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

@@ -80,6 +80,7 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   }
 
   process.env.SETUP_TOKEN = "test-setup-token-value";
+  assert.equal((await request("/public")).body.settings.theme, "dark");
   assert.equal((await request("/bootstrap")).body.needs_setup, true);
   assert.equal((await request("/bootstrap")).body.requires_setup_token, true);
   assert.equal(
