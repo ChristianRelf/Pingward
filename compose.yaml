@@ -1,0 +1,16 @@
+services:
+  pingward:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATA_DIR: /data
+      # Set TRUST_PROXY=1 when a trusted reverse proxy terminates HTTPS.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    volumes:
+      - pingward-data:/data
+
+volumes:
+  pingward-data:

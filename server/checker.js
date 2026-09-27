@@ -23,6 +23,9 @@ export function validateMonitor(input) {
   if (!Number.isInteger(expected) || expected < 100 || expected > 599) throw new Error('Expected status must be 100–599.');
   const groupIds = [...new Set((Array.isArray(input.group_ids) ? input.group_ids : []).map(Number))];
   if (groupIds.some(id => !Number.isInteger(id) || id < 1)) throw new Error('Invalid group.');
+  for (const id of groupIds) {
+    if (!db.prepare('SELECT id FROM groups WHERE id = ?').get(id)) throw new Error('A selected group no longer exists.');
+  }
   return { name, type, target, port, interval, timeout, expected, active: input.active === false ? 0 : 1, groupIds };
 }
 
@@ -68,23 +71,28 @@ const running = new Set();
 export async function runCheck(monitor) {
   if (running.has(monitor.id)) return;
   running.add(monitor.id);
-  const started = Date.now();
-  let result;
   try {
-    result = monitor.type === 'tcp' ? await checkTcp(monitor) : await checkHttp(monitor);
-  } catch (error) {
-    result = { up: false, error: String(error.message || error).slice(0, 300) };
+    const started = Date.now();
+    let result;
+    try {
+      result = monitor.type === 'tcp' ? await checkTcp(monitor) : await checkHttp(monitor);
+    } catch (error) {
+      result = { up: false, error: String(error.message || error).slice(0, 300) };
+    }
+    const status = result.up ? 'up' : 'down';
+    const responseMs = Date.now() - started;
+    const checkedAt = new Date().toISOString();
+    const current = db.prepare('SELECT status, target, port, type FROM monitors WHERE id = ?').get(monitor.id);
+    if (!current || current.target !== monitor.target || current.port !== monitor.port || current.type !== monitor.type) return;
+    db.prepare('INSERT INTO checks (monitor_id, checked_at, status, response_ms, error) VALUES (?, ?, ?, ?, ?)')
+      .run(monitor.id, checkedAt, status, responseMs, result.error);
+    db.prepare('UPDATE monitors SET status = ?, last_checked_at = ?, last_response_ms = ?, last_error = ? WHERE id = ?')
+      .run(status, checkedAt, responseMs, result.error, monitor.id);
+    if (current.status !== status) sendAlert(monitor, current.status, status, result.error).catch(error => console.error('SMTP alert failed:', error.message));
+    return { status, response_ms: responseMs, error: result.error };
+  } finally {
+    running.delete(monitor.id);
   }
-  const status = result.up ? 'up' : 'down';
-  const responseMs = Date.now() - started;
-  const checkedAt = new Date().toISOString();
-  db.prepare('INSERT INTO checks (monitor_id, checked_at, status, response_ms, error) VALUES (?, ?, ?, ?, ?)')
-    .run(monitor.id, checkedAt, status, responseMs, result.error);
-  db.prepare('UPDATE monitors SET status = ?, last_checked_at = ?, last_response_ms = ?, last_error = ? WHERE id = ?')
-    .run(status, checkedAt, responseMs, result.error, monitor.id);
-  if (monitor.status !== status) sendAlert(monitor, monitor.status, status, result.error).catch(error => console.error('SMTP alert failed:', error.message));
-  running.delete(monitor.id);
-  return { status, response_ms: responseMs, error: result.error };
 }
 
 let scheduler;
