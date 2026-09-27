@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${PINGWARD_BIND_ADDRESS:-0.0.0.0}:${PINGWARD_HOST_PORT:-3000}:3000"
     environment:
       PORT: 3000
       DATA_DIR: /data

@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"node --watch server/index.js\" \"vite --host 0.0.0.0\"",
+    "dev": "node --watch scripts/dev.js",
     "build": "vite build",
+    "docker:up": "bash scripts/up.sh",
     "start": "node server/index.js",
-    "test": "node --test server/*.test.js",
-    "format": "prettier --write src server vite.config.js",
-    "format:check": "prettier --check src server vite.config.js"
+    "test": "node --test server/*.test.js scripts/*.test.js",
+    "format": "prettier --write src server scripts/*.js vite.config.js",
+    "format:check": "prettier --check src server scripts/*.js vite.config.js"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -20,7 +21,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^9.2.0",
     "prettier": "^3.9.9",
     "vite": "^6.3.0"
   }

@@ -7,7 +7,7 @@ COPY src ./src
 RUN npm run build
 
 FROM node:24-bookworm-slim
-ENV NODE_ENV=production PORT=3000 DATA_DIR=/data
+ENV NODE_ENV=production PORT=3000 STRICT_PORT=1 DATA_DIR=/data
 WORKDIR /app
 RUN groupadd --system --gid 10001 pingward && useradd --system --uid 10001 --gid pingward pingward && mkdir /data && chown pingward:pingward /data
 COPY package.json package-lock.json ./

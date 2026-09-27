@@ -21,6 +21,7 @@ import {
   destroySession,
 } from "./auth.js";
 import { validateMonitor, runCheck, startScheduler } from "./checker.js";
+import { listenOnAvailablePort } from "./port.js";
 
 export const app = express();
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
@@ -484,9 +485,17 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
-  startScheduler();
-  const port = Number(process.env.PORT || 3000);
-  app.listen(port, "0.0.0.0", () =>
-    console.log(`Pingward listening on http://0.0.0.0:${port}`),
-  );
+  listenOnAvailablePort(
+    app,
+    process.env.PORT || 3000,
+    process.env.STRICT_PORT === "1",
+  )
+    .then(({ port }) => {
+      startScheduler();
+      console.log(`Pingward listening on http://0.0.0.0:${port}`);
+    })
+    .catch((error) => {
+      console.error("Pingward could not start:", error.message);
+      process.exitCode = 1;
+    });
 }

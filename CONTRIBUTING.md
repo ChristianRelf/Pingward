@@ -5,7 +5,7 @@ Thanks for helping make self-hosted status pages easier to use.
 ## Development
 
 1. Use Node.js 24 or later and run `npm ci`.
-2. Run `npm run dev` and open `http://localhost:5173`.
+2. Run `npm run dev` and open the Vite URL it prints. The API starts at port 3000 or the next available port.
 3. Make a focused change. Keep management inside the web app and avoid required external services.
 4. Run `npm test`, `npm run build`, `npm audit`, and `npm run format:check` before opening a pull request.
 
