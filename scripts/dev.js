@@ -11,7 +11,13 @@ process.env.PINGWARD_API_PORT = String(port);
 startScheduler();
 
 const vite = await createViteServer({
-  server: { proxy: { "/api": `http://127.0.0.1:${port}` } },
+  server: {
+    proxy: {
+      "/api": `http://127.0.0.1:${port}`,
+      "/favicon": `http://127.0.0.1:${port}`,
+      "/og-image.png": `http://127.0.0.1:${port}`,
+    },
+  },
 });
 
 try {

@@ -25,3 +25,10 @@ export const slugify = (value) =>
     .replace(/^-|-$/g, "");
 export const statusLabel = (status) =>
   status === "up" ? "Operational" : status === "down" ? "Outage" : "Checking";
+export const urlLabel = (value) => {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "Website";
+  }
+};

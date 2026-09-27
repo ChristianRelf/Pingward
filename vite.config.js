@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "0.0.0.0",
-    proxy: { "/api": `http://127.0.0.1:${apiPort}` },
+    proxy: {
+      "/api": `http://127.0.0.1:${apiPort}`,
+      "/favicon": `http://127.0.0.1:${apiPort}`,
+      "/og-image.png": `http://127.0.0.1:${apiPort}`,
+    },
   },
 });

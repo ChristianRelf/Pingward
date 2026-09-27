@@ -9,7 +9,7 @@ import {
   ExternalLink,
   Radio,
 } from "lucide-react";
-import { api } from "./api";
+import { api, urlLabel } from "./api";
 import { Brand, MonitorCard, MonitorRow, EventCard } from "./ui";
 
 function eventsForMonitor(events, monitor) {
@@ -29,22 +29,51 @@ function GroupAccordion({
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const down = monitors.some((monitor) => monitor.status === "down");
+  const panelId = `group-panel-${group.id}`;
   return (
-    <section className="status-group" id={`group-${group.slug}`}>
-      <button
-        type="button"
-        className="status-group-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
+    <section
+      className={`status-group ${open ? "is-open" : ""}`}
+      id={`group-${group.slug}`}
+    >
+      <div className="status-group-header">
+        <button
+          type="button"
+          className="status-group-toggle"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronRight className={open ? "expanded" : ""} size={18} />
+          <strong>{group.name}</strong>
+          {down && <span className="group-issue">Issues</span>}
+          <span className="group-service-count">
+            {monitors.length} {monitors.length === 1 ? "service" : "services"}
+          </span>
+        </button>
+        {group.website_url && (
+          <a
+            className="status-group-page-link"
+            href={group.website_url}
+            target="_blank"
+            rel="noreferrer"
+            title={`Visit ${group.name} website`}
+          >
+            <span>{urlLabel(group.website_url)}</span>{" "}
+            <ExternalLink size={13} />
+          </a>
+        )}
+        {group.display_mode === "page" && (
+          <a className="status-group-page-link" href={`/status/${group.slug}`}>
+            <span>View page</span> <ArrowRight size={14} />
+          </a>
+        )}
+      </div>
+      <div
+        id={panelId}
+        className="status-group-panel"
+        aria-hidden={!open}
+        inert={!open}
       >
-        <ChevronRight className={open ? "expanded" : ""} size={18} />
-        <strong>{group.name}</strong>
-        {down && <span className="group-issue">Issues</span>}
-        <span className="group-service-count">
-          {monitors.length} {monitors.length === 1 ? "service" : "services"}
-        </span>
-      </button>
-      {open && (
         <div className="status-group-services">
           {monitors.length ? (
             monitors.map((monitor) => (
@@ -62,7 +91,7 @@ function GroupAccordion({
             </p>
           )}
         </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -146,6 +175,9 @@ export function PublicPage({ embedId = null }) {
     : monitors;
   const hasVisibleServices =
     standaloneMonitors.length > 0 || (showGroups && data.groups.length > 0);
+  const firstInlineGroupId = data.groups.find(
+    (group) => group.display_mode === "inline",
+  )?.id;
   const theme = data.settings.theme;
   const showResponseTime = data.settings.show_response_time !== "false";
   const brandProps = {
@@ -190,6 +222,17 @@ export function PublicPage({ embedId = null }) {
             <p className="hero-copy">
               {selectedGroup?.description || data.settings.site_description}
             </p>
+            {!embedId && selectedGroup?.website_url && (
+              <a
+                className="group-website-link"
+                href={selectedGroup.website_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Visit {urlLabel(selectedGroup.website_url)}{" "}
+                <ExternalLink size={13} />
+              </a>
+            )}
           </div>
           {!embedId && (
             <span className="updated">
@@ -272,34 +315,20 @@ export function PublicPage({ embedId = null }) {
             ))}
           {showGroups && data.groups.length > 0 && (
             <div className="status-groups">
-              {data.groups.map((group, index) => {
+              {data.groups.map((group) => {
                 const groupMonitors = monitors.filter((monitor) =>
                   monitor.group_ids.includes(group.id),
                 );
-                return group.display_mode === "inline" ? (
+                return (
                   <GroupAccordion
                     key={group.id}
                     group={group}
                     monitors={groupMonitors}
                     events={data.events}
                     barStyle={data.settings.bar_style}
-                    initiallyOpen={index === 0}
+                    initiallyOpen={group.id === firstInlineGroupId}
                     showResponseTime={showResponseTime}
                   />
-                ) : (
-                  <a
-                    key={group.id}
-                    className="status-group status-group-link"
-                    href={`/status/${group.slug}`}
-                  >
-                    <ChevronRight size={18} />
-                    <strong>{group.name}</strong>
-                    <span className="group-service-count">
-                      {groupMonitors.length}{" "}
-                      {groupMonitors.length === 1 ? "service" : "services"}
-                    </span>
-                    <ArrowRight size={15} />
-                  </a>
                 );
               })}
             </div>

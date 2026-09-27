@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS groups (
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
+  website_url TEXT NOT NULL DEFAULT '',
   custom_domain TEXT NOT NULL DEFAULT '',
   display_mode TEXT NOT NULL DEFAULT 'inline',
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -76,6 +77,12 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS branding_assets (
+  key TEXT PRIMARY KEY,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `);
 
 const monitorColumns = new Set(
@@ -104,6 +111,8 @@ if (!groupColumns.has("display_mode"))
   db.exec(
     "ALTER TABLE groups ADD COLUMN display_mode TEXT NOT NULL DEFAULT 'page'",
   );
+if (!groupColumns.has("website_url"))
+  db.exec("ALTER TABLE groups ADD COLUMN website_url TEXT NOT NULL DEFAULT ''");
 
 const defaults = {
   site_name: "Pingward",
@@ -201,6 +210,24 @@ export function eventRows(publishedOnly = false) {
     )
     .all();
   return rows.map((row) => ({ ...row, published: Boolean(row.published) }));
+}
+
+export function brandingAsset(key) {
+  return db
+    .prepare("SELECT mime, data, updated_at FROM branding_assets WHERE key = ?")
+    .get(key);
+}
+
+export function brandingSummary() {
+  const rows = db.prepare("SELECT key, updated_at FROM branding_assets").all();
+  return {
+    has_og_image: rows.some((row) => row.key === "og_image"),
+    has_favicon: rows.some((row) => row.key === "favicon"),
+    og_image_updated_at:
+      rows.find((row) => row.key === "og_image")?.updated_at || 0,
+    favicon_updated_at:
+      rows.find((row) => row.key === "favicon")?.updated_at || 0,
+  };
 }
 
 export function historyFor(monitorId, days = 90) {

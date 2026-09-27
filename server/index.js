@@ -1,5 +1,5 @@
 import express from "express";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { timingSafeEqual } from "node:crypto";
@@ -11,6 +11,8 @@ import {
   groupRows,
   eventRows,
   historyFor,
+  brandingAsset,
+  brandingSummary,
 } from "./db.js";
 import {
   hashPassword,
@@ -23,6 +25,8 @@ import {
 import { validateMonitor, runCheck, startScheduler } from "./checker.js";
 import { listenOnAvailablePort } from "./port.js";
 import { monitorLogoInput } from "./monitor-logo.js";
+import { brandingAssetInput } from "./branding-assets.js";
+import { renderSocialHtml } from "./social.js";
 
 export const app = express();
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
@@ -37,6 +41,11 @@ app.use("/api", (req, res, next) => {
   next();
 });
 app.use("/api/admin/monitors", requireAdmin, express.json({ limit: "1mb" }));
+app.use(
+  "/api/admin/branding-assets",
+  requireAdmin,
+  express.json({ limit: "3mb" }),
+);
 app.use(express.json({ limit: "64kb" }));
 
 const text = (value, max = 500) =>
@@ -202,10 +211,42 @@ app.get("/api/public", (req, res) => {
   });
 });
 
+function sendBrandingAsset(res, key) {
+  const asset = brandingAsset(key);
+  if (!asset) return false;
+  res
+    .set({
+      "Cache-Control": "public, max-age=3600",
+      ETag: `"${asset.updated_at}"`,
+    })
+    .type(asset.mime)
+    .send(Buffer.from(asset.data));
+  return true;
+}
+
+app.get("/og-image.png", (_req, res) => {
+  if (!sendBrandingAsset(res, "og_image")) notFound(res);
+});
+const faviconHandler = (_req, res) => {
+  if (sendBrandingAsset(res, "favicon")) return;
+  const config = settings();
+  const initial =
+    config.site_name.match(/[a-z0-9]/i)?.[0]?.toUpperCase() || "P";
+  res
+    .set("Cache-Control", "public, max-age=300")
+    .type("image/svg+xml")
+    .send(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${config.accent_color}"/><text x="64" y="68" fill="white" font-family="Arial,sans-serif" font-size="62" font-weight="700" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`,
+    );
+};
+app.get("/favicon", faviconHandler);
+app.get("/favicon.ico", faviconHandler);
+
 app.use("/api/admin", requireAdmin);
 app.get("/api/admin/data", (_req, res) => {
   res.json({
     settings: settings(),
+    branding: brandingSummary(),
     groups: groupRows(),
     monitors: monitorRows().map((row) => ({
       ...row,
@@ -213,6 +254,33 @@ app.get("/api/admin/data", (_req, res) => {
     })),
     events: eventRows(),
   });
+});
+
+app.put("/api/admin/branding-assets", (req, res) => {
+  const assets = {
+    og_image: brandingAssetInput(req.body.og_image, "og_image"),
+    favicon: brandingAssetInput(req.body.favicon, "favicon"),
+  };
+  const updatedAt = Date.now();
+  const put = db.prepare(
+    `INSERT INTO branding_assets (key, mime, data, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`,
+  );
+  db.exec("BEGIN");
+  try {
+    for (const [key, asset] of Object.entries(assets))
+      put.run(key, asset.mime, asset.data, updatedAt);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  res.json({ branding: brandingSummary() });
+});
+
+app.delete("/api/admin/branding-assets", (_req, res) => {
+  db.prepare("DELETE FROM branding_assets").run();
+  res.json({ branding: brandingSummary() });
 });
 
 app.post("/api/admin/monitors", (req, res) => {
@@ -303,6 +371,7 @@ function groupInput(body, old = null) {
   const name = text(body.name, 100);
   const slug = text(body.slug, 100).toLowerCase();
   const description = text(body.description, 500);
+  const websiteUrl = text(body.website_url, 500);
   const customDomain = text(body.custom_domain, 253)
     .toLowerCase()
     .replace(/\.$/, "");
@@ -316,20 +385,40 @@ function groupInput(body, old = null) {
     !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(customDomain)
   )
     throw new Error("Enter a domain without a protocol or path.");
+  if (websiteUrl) {
+    let parsed;
+    try {
+      parsed = new URL(websiteUrl);
+    } catch {
+      throw new Error(
+        "Website URL must be a complete http:// or https:// URL.",
+      );
+    }
+    if (!["http:", "https:"].includes(parsed.protocol))
+      throw new Error("Website URL must start with http:// or https://.");
+  }
   if (!["inline", "page"].includes(displayMode))
     throw new Error("Choose where this group appears.");
-  return { name, slug, description, customDomain, displayMode };
+  return {
+    name,
+    slug,
+    description,
+    websiteUrl,
+    customDomain,
+    displayMode,
+  };
 }
 app.post("/api/admin/groups", (req, res) => {
   const data = groupInput(req.body);
   const result = db
     .prepare(
-      "INSERT INTO groups (name, slug, description, custom_domain, display_mode) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO groups (name, slug, description, website_url, custom_domain, display_mode) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .run(
       data.name,
       data.slug,
       data.description,
+      data.websiteUrl,
       data.customDomain,
       data.displayMode,
     );
@@ -342,12 +431,13 @@ app.put("/api/admin/groups/:id", (req, res) => {
   const data = groupInput(req.body, old);
   const result = db
     .prepare(
-      "UPDATE groups SET name = ?, slug = ?, description = ?, custom_domain = ?, display_mode = ? WHERE id = ?",
+      "UPDATE groups SET name = ?, slug = ?, description = ?, website_url = ?, custom_domain = ?, display_mode = ? WHERE id = ?",
     )
     .run(
       data.name,
       data.slug,
       data.description,
+      data.websiteUrl,
       data.customDomain,
       data.displayMode,
       id,
@@ -546,8 +636,54 @@ app.use((error, _req, res, _next) => {
 
 const dist = resolve("dist");
 if (existsSync(dist)) {
-  app.use(express.static(dist));
-  app.use((_req, res) => res.sendFile(join(dist, "index.html")));
+  const indexTemplate = readFileSync(join(dist, "index.html"), "utf8");
+  app.use(express.static(dist, { index: false }));
+  app.use((req, res) => {
+    const config = settings();
+    const groups = groupRows();
+    const hostGroup = groups.find(
+      (group) =>
+        group.custom_domain &&
+        group.custom_domain.toLowerCase() === req.hostname.toLowerCase(),
+    );
+    const slugMatch = /^\/status\/([^/]+)/.exec(req.path);
+    let requestedSlug = "";
+    try {
+      requestedSlug = slugMatch ? decodeURIComponent(slugMatch[1]) : "";
+    } catch {
+      requestedSlug = "";
+    }
+    const pathGroup = slugMatch
+      ? groups.find((group) => group.slug === requestedSlug)
+      : null;
+    const group = hostGroup || pathGroup;
+    const requestBase = `${req.protocol}://${req.get("host")}`;
+    const configuredBase = config.public_url.replace(/\/$/, "") || requestBase;
+    const pageUrl = hostGroup
+      ? requestBase
+      : group
+        ? `${configuredBase}/status/${encodeURIComponent(group.slug)}`
+        : configuredBase;
+    const branding = brandingSummary();
+    const title = `${group?.name || config.site_name} · Status`;
+    const description = group?.description || config.site_description;
+    res
+      .set("Cache-Control", "no-cache")
+      .type("html")
+      .send(
+        renderSocialHtml(indexTemplate, {
+          title,
+          siteName: config.site_name,
+          description,
+          pageUrl,
+          accentColor: config.accent_color,
+          faviconVersion: branding.favicon_updated_at,
+          ogImageUrl: branding.has_og_image
+            ? `${requestBase}/og-image.png?v=${branding.og_image_updated_at}`
+            : "",
+        }),
+      );
+  });
 }
 
 if (

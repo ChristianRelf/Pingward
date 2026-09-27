@@ -151,6 +151,23 @@ function Wait-Docker([int]$Seconds) {
   return ''
 }
 
+function Get-LanAddresses {
+  try {
+    $addresses = @(
+      foreach ($config in @(Get-NetIPConfiguration -ErrorAction SilentlyContinue)) {
+        if (-not $config.IPv4DefaultGateway) { continue }
+        foreach ($entry in @($config.IPv4Address)) {
+          $address = [string]$entry.IPAddress
+          if ($address -and $address -notmatch '^(127\.|169\.254\.|0\.)') { $address }
+        }
+      }
+    )
+    return $addresses | Select-Object -Unique
+  } catch {
+    return @()
+  }
+}
+
 if ($Help) { Show-Help; exit 0 }
 
 try {
@@ -307,8 +324,26 @@ try {
   Set-Setting 'PINGWARD_HOST_PORT' ([string]$chosenPort)
   Set-Setting 'PINGWARD_BIND_ADDRESS' $bind
   [System.IO.File]::WriteAllText($PortPath, "$chosenPort`n", $Utf8)
-  $displayHost = if ($bind -eq '0.0.0.0' -or $bind -eq '127.0.0.1') { 'localhost' } else { $bind }
-  Write-Host "`nPingward is ready at http://${displayHost}:$chosenPort"
+  $displayHost = 'localhost'
+  Write-Host "`nPingward is ready."
+  if ($bind -eq '0.0.0.0') {
+    Write-Host "On this server: http://localhost:$chosenPort"
+    $lanAddresses = @(Get-LanAddresses)
+    if ($lanAddresses.Count -gt 0) {
+      $displayHost = $lanAddresses[0]
+      foreach ($address in $lanAddresses) {
+        Write-Host "On your network: http://${address}:$chosenPort"
+      }
+    } else {
+      Write-Host "To open Pingward from another device, find this server's IPv4 address with ipconfig and use http://<server-ip>:$chosenPort"
+    }
+  } elseif ($bind -eq '127.0.0.1') {
+    Write-Host "On this server only: http://localhost:$chosenPort"
+    Write-Host 'To allow other devices, rerun with -BindAddress 0.0.0.0.'
+  } else {
+    $displayHost = $bind
+    Write-Host "On your network: http://${bind}:$chosenPort"
+  }
 
   $bootstrapScript = "fetch('http://127.0.0.1:3000/api/bootstrap').then(r=>r.json()).then(d=>console.log(d.needs_setup?'setup':'ready')).catch(()=>process.exit(1))"
   $bootstrap = Capture-Docker -Arguments @('exec', $containerId, 'node', '-e', $bootstrapScript)
@@ -319,6 +354,7 @@ try {
     else { Write-Host 'Use SETUP_TOKEN from .env on the setup form.' }
   } elseif ($bootstrap.Code -eq 0 -and $bootstrap.Output.Trim() -eq 'ready') {
     Write-Host 'Your existing admin account and data are ready.'
+    Write-Host "Admin dashboard: http://${displayHost}:$chosenPort/admin"
   } else {
     Write-Host "Open http://${displayHost}:$chosenPort/admin to finish setup or sign in."
     Write-Host 'The setup token is stored in .env.'

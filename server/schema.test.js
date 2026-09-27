@@ -36,16 +36,19 @@ test("existing groups and monitors gain display and logo defaults", () => {
       [
         "--input-type=module",
         "-e",
-        `import { groupRows, monitorRows } from ${JSON.stringify(dbModule)}; console.log(JSON.stringify({ group: groupRows()[0], monitor: monitorRows()[0] }));`,
+        `import { groupRows, monitorRows, brandingSummary } from ${JSON.stringify(dbModule)}; console.log(JSON.stringify({ group: groupRows()[0], monitor: monitorRows()[0], branding: brandingSummary() }));`,
       ],
       { env: { ...process.env, DATA_DIR: dataDir }, encoding: "utf8" },
     );
     assert.equal(result.status, 0, result.stderr);
-    const { group, monitor } = JSON.parse(result.stdout);
+    const { group, monitor, branding } = JSON.parse(result.stdout);
     assert.equal(group.display_mode, "page");
+    assert.equal(group.website_url, "");
     assert.equal(monitor.logo_preset, "activity");
     assert.equal(monitor.has_logo, false);
     assert.equal(monitor.logo_updated_at, 0);
+    assert.equal(branding.has_og_image, false);
+    assert.equal(branding.has_favicon, false);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
   }

@@ -286,6 +286,7 @@ export function GroupForm({ initial, onSave, onClose }) {
       name: "",
       slug: "",
       description: "",
+      website_url: "",
       custom_domain: "",
       display_mode: "inline",
     },
@@ -375,10 +376,25 @@ export function GroupForm({ initial, onSave, onClose }) {
               onClick={() => setForm({ ...form, display_mode: "page" })}
             >
               <strong>Separate page</strong>
-              <span>Link to a dedicated group status page.</span>
+              <span>
+                Dedicated page, with an expandable group on the main page.
+              </span>
             </button>
           </div>
         </div>
+        <label>
+          Website URL <span className="optional">optional</span>
+          <input
+            type="url"
+            value={form.website_url || ""}
+            onChange={(e) => setForm({ ...form, website_url: e.target.value })}
+            placeholder="https://example.com"
+          />
+          <small>
+            Adds a public link from this group to the service or organisation
+            website.
+          </small>
+        </label>
         <label>
           Custom domain <span className="optional">optional</span>
           <input

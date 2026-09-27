@@ -22,16 +22,18 @@ import {
   Palette,
   Radio,
   RefreshCw,
+  Share2,
   Settings2,
   ShieldCheck,
   Trash2,
   X,
   Zap,
 } from "lucide-react";
-import { api, dateLabel } from "./api";
+import { api, dateLabel, urlLabel } from "./api";
 import { Brand, BrandMark, StatusPill, History } from "./ui";
 import { MonitorLogo } from "./monitor-logo";
 import { MonitorForm, GroupForm, EventForm } from "./forms";
+import { generateBrandAssets } from "./brand-assets";
 
 const accentChoices = [
   ["#21ab75", "Emerald"],
@@ -114,6 +116,7 @@ export function AdminPage({ admin }) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [settingsForm, setSettingsForm] = useState(null);
+  const [assetBusy, setAssetBusy] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current_password: "",
     new_password: "",
@@ -138,6 +141,37 @@ export function AdminPage({ admin }) {
     setNotice(message);
     setError("");
     setTimeout(() => setNotice(""), 4000);
+  }
+  async function generateShareAssets() {
+    setAssetBusy(true);
+    setError("");
+    try {
+      const assets = generateBrandAssets(settingsForm);
+      await api("/admin/settings", { method: "PUT", body: settingsForm });
+      await api("/admin/branding-assets", { method: "PUT", body: assets });
+      await reload();
+      setNotice("Social image and favicon generated.");
+      setTimeout(() => setNotice(""), 4000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAssetBusy(false);
+    }
+  }
+  async function resetShareAssets() {
+    setAssetBusy(true);
+    try {
+      await mutate(
+        "/admin/branding-assets",
+        "DELETE",
+        null,
+        "Generated branding assets removed.",
+      );
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAssetBusy(false);
+    }
   }
   function confirmDelete(kind, item) {
     if (
@@ -599,6 +633,16 @@ export function AdminPage({ admin }) {
                                   <Globe2 size={15} /> {group.custom_domain}
                                 </span>
                               )}
+                              {group.website_url && (
+                                <a
+                                  href={group.website_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <ExternalLink size={15} />{" "}
+                                  {urlLabel(group.website_url)}
+                                </a>
+                              )}
                             </div>
                             <div className="group-card-actions">
                               <a
@@ -728,6 +772,86 @@ export function AdminPage({ admin }) {
                   }}
                 >
                   <AppearancePreview settings={settingsForm} />
+                  <section className="panel settings-panel share-assets-panel">
+                    <div className="settings-panel-head">
+                      <span className="settings-icon">
+                        <Share2 size={20} />
+                      </span>
+                      <div>
+                        <h2>Social image & favicon</h2>
+                        <p>
+                          Generate unique share assets from your current name,
+                          description, accent colour and brand mark.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="share-assets-preview">
+                      <div className="og-preview">
+                        {data.branding?.has_og_image ? (
+                          <img
+                            src={`/og-image.png?v=${data.branding.og_image_updated_at}`}
+                            alt="Current generated social sharing preview"
+                          />
+                        ) : (
+                          <div
+                            className="og-preview-empty"
+                            style={{
+                              "--asset-accent": settingsForm.accent_color,
+                            }}
+                          >
+                            <Share2 size={24} />
+                            <strong>No social image generated yet</strong>
+                            <span>1200 × 630 PNG</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="favicon-preview">
+                        <span>Browser icon</span>
+                        <div>
+                          <img
+                            src={`/favicon?v=${data.branding?.favicon_updated_at || 0}`}
+                            alt="Current favicon"
+                          />
+                          <div>
+                            <strong>{settingsForm.site_name}</strong>
+                            <small>
+                              {settingsForm.public_url || "Your domain"}
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="share-assets-actions">
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        disabled={assetBusy}
+                        onClick={generateShareAssets}
+                      >
+                        <RefreshCw
+                          className={assetBusy ? "spinning" : ""}
+                          size={16}
+                        />
+                        {data.branding?.has_og_image
+                          ? "Regenerate assets"
+                          : "Generate assets"}
+                      </button>
+                      {data.branding?.has_og_image && (
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          disabled={assetBusy}
+                          onClick={resetShareAssets}
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <small>
+                        Generate again after changing your branding. This also
+                        saves the current appearance settings.
+                      </small>
+                    </div>
+                  </section>
                   <section className="panel settings-panel">
                     <div className="settings-panel-head">
                       <span className="settings-icon">

@@ -6,6 +6,15 @@ import { join } from "node:path";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 
+function pngDataUrl(width, height) {
+  const data = Buffer.alloc(24);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(data);
+  data.write("IHDR", 12, "ascii");
+  data.writeUInt32BE(width, 16);
+  data.writeUInt32BE(height, 20);
+  return `data:image/png;base64,${data.toString("base64")}`;
+}
+
 const testDir = mkdtempSync(join(tmpdir(), "pingward-test-"));
 process.env.DATA_DIR = testDir;
 const { app } = await import("./index.js");
@@ -119,11 +128,22 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
     name: "Core services",
     slug: "core-services",
     description: "Essential systems",
+    website_url: "https://rnl.example.com",
     custom_domain: "status.example.com",
     display_mode: "inline",
   });
   assert.equal(group.status, 201);
   const groupId = group.body.id;
+  assert.equal(
+    (
+      await request("/admin/groups", "POST", {
+        name: "Unsafe link",
+        slug: "unsafe-link",
+        website_url: "javascript:alert(1)",
+      })
+    ).status,
+    400,
+  );
   assert.equal(
     (
       await request("/admin/groups", "POST", {
@@ -197,6 +217,10 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   assert.equal(
     page.body.groups.find((item) => item.id === groupId).display_mode,
     "inline",
+  );
+  assert.equal(
+    page.body.groups.find((item) => item.id === groupId).website_url,
+    "https://rnl.example.com",
   );
   assert.equal(
     (await request("/public")).body.groups.find(
@@ -286,6 +310,21 @@ test("admin can set up an instance, monitor a URL, and publish a grouped status 
   });
   assert.equal(settings.status, 200);
   assert.equal(settings.body.settings.accent_color, "#3b82f6");
+  const branding = await request("/admin/branding-assets", "PUT", {
+    og_image: pngDataUrl(1200, 630),
+    favicon: pngDataUrl(128, 128),
+  });
+  assert.equal(branding.status, 200);
+  assert.equal(branding.body.branding.has_og_image, true);
+  assert.equal(
+    (await fetch(`${base}/og-image.png`)).headers.get("content-type"),
+    "image/png",
+  );
+  assert.equal(
+    (await fetch(`${base}/favicon`)).headers.get("content-type"),
+    "image/png",
+  );
+  assert.equal((await request("/admin/data")).body.branding.has_favicon, true);
   const publicSettings = (await request("/public")).body.settings;
   assert.equal(publicSettings.brand_icon, "shield");
   assert.equal(publicSettings.page_width, "wide");
