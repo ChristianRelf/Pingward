@@ -24,6 +24,8 @@ docker compose up -d --build
 
 Open `http://localhost:3000` to see the status page, then visit `http://localhost:3000/admin` to create the administrator account. The database lives in the `pingward-data` Docker volume. Keep this volume when updating the container.
 
+If the instance will be reachable from the internet before you finish setup, set a random `SETUP_TOKEN` in a `.env` file next to `compose.yaml` before starting the container. For example, use `openssl rand -hex 24` to generate one. The setup form will ask for it. Remove the variable after creating the admin account. Without a setup token, the first visitor to `/admin` can create the account.
+
 For a domain or subdomain, point DNS to your server and put a reverse proxy in front of port 3000. Set `TRUST_PROXY=1` in a `.env` file next to `compose.yaml` when that proxy forwards HTTPS and is the only path to Pingward. Then set **Public URL** under **Appearance**. Pingward uses the request hostname for group custom domains, so point each group domain at the same proxy and forward the original `Host` header. The reverse proxy handles TLS certificates.
 
 Example Nginx proxy configuration:
@@ -68,7 +70,7 @@ Set `DATA_DIR` to choose where `pingward.sqlite` is stored; it defaults to `./da
 2. Add an HTTP URL (such as `https://example.com/health`) or a TCP host and port under **Monitors**. The minimum interval is 30 seconds.
 3. Create groups under **Groups**, then edit monitors to assign them to one or more groups. Copy an iframe snippet from a group card to embed its status elsewhere.
 4. Publish updates under **Updates**. Use **Appearance** for the page theme, layout, and history style.
-5. Enter your SMTP server, sender, and recipient under **Notifications**. Save, then send a test email. Pingward sends alerts when a monitor changes between pending, up, and down.
+5. Enter your SMTP server, sender, and recipient under **Notifications**. Save, then send a test email. Pingward sends alerts when a monitor goes down or recovers. A newly added healthy monitor does not send an alert.
 
 The admin dashboard is on the same host as the public page. There is no outbound connection to Pingward infrastructure. HTTP checks contact only the URLs you configure, and SMTP alerts contact only the mail server you configure. The GitHub link in the public footer is a normal outbound link for visitors who choose to click it.
 
@@ -88,6 +90,7 @@ Useful commands:
 npm test
 npm run build
 npm audit
+npm run format:check
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. Pingward is MIT licensed.

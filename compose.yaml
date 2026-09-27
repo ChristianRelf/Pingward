@@ -9,6 +9,7 @@ services:
       DATA_DIR: /data
       # Set TRUST_PROXY=1 when a trusted reverse proxy terminates HTTPS.
       TRUST_PROXY: ${TRUST_PROXY:-0}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
     volumes:
       - pingward-data:/data
 
