@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html vite.config.js ./
 COPY src ./src
+COPY shared ./shared
 RUN npm run build
 
 FROM node:24-bookworm-slim
@@ -13,6 +14,7 @@ RUN groupadd --system --gid 10001 pingward && useradd --system --uid 10001 --gid
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY server ./server
+COPY shared ./shared
 COPY --from=build /app/dist ./dist
 USER pingward
 EXPOSE 3000
